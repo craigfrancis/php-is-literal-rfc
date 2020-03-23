@@ -58,7 +58,7 @@ The Taint extension also [conflicts with XDebug](https://github.com/laruence/tai
 
 ## Previous RFC
 
-Matt Tait suggested [[https://wiki.php.net/rfc/sql_injection_protection||Automatic SQL Injection Protection]].
+Matt Tait suggested [Automatic SQL Injection Protection](https://wiki.php.net/rfc/sql_injection_protection).
 
 It was noted that "unfiltered input can affect way more than only SQL" ([Pierre Joye](https://news-web.php.net/php.internals/87355)), and this amount of work isn't ideal for "just for one use case" ([Julien Pauli](https://news-web.php.net/php.internals/87647)).
 
@@ -351,10 +351,7 @@ Not sure
 
 ## Open Issues
 
-1. Would this cause performance issues?
-2. Can `array_fill()`+`implode()` or `str_repeat()`+`substr()` pass though the "is_literal" flag for the "WHERE IN" case?
-3. Should the function be named `is_from_literal()`? (suggestion from [Jakob Givoni](https://news-web.php.net/php.internals/109197))
-4. Systems/Frameworks that define certain variables (e.g. table name prefixes) without the use of a literal (e.g. ini/json/yaml files), won't be able to use this check, as originally noted by [Dennis Birkholz](https://news-web.php.net/php.internals/87667).
+On [GitHub](https://github.com/craigfrancis/php-is-literal-rfc/issues)
 
 ## Alternatives
 
