@@ -18,12 +18,32 @@ This will also allow systems/frameworks to decide if they want to **block**, **e
 
 Literals are values defined within the PHP scripts, for example:
 
-    $a = 'Hi';
-    $b = 'Example ' . $a;
-    is_literal($b); // Returns true
+    $a = 'Example';
+    is_literal($a); // true
     
-    $c = 'Example ' . $_GET['id'];
-    is_literal($c); // Returns false
+    $a = 'Example ' . $a . ', ' . 5;
+    is_literal($a); // true
+    
+    $a = 'Example ' . $_GET['id'];
+    is_literal($a); // false
+    
+    $a = 'Example ' . time();
+    is_literal($a); // false
+    
+    $a = sprintf('LIMIT %d', 3);
+    is_literal($a); // false
+    
+    $c = count($ids);
+    $a = 'WHERE id IN (' . implode(',', array_fill(0, $c, '?')) . ')';
+    is_literal($a); // true, the odd one that involves functions.
+    
+    $c = count($ids);
+    $a = 'WHERE id IN (' . substr(str_repeat('?,', $c), 0, -1) . ')';
+    is_literal($a); // false, probably, as substr is manipulating the string
+    
+    $limit = 10;
+    $a = 'LIMIT ' . ($limit + 1);
+    is_literal($a); // false, or could this one be allowed?
 
 ## Related JavaScript Implementation
 
@@ -138,13 +158,9 @@ To ensure `ORDER BY` can be set via the user, but only use acceptable values:
 
 Most SQL strings can be a concatenations of literal values, but `WHERE x IN (?,?,?)` needs to use a variable number of literal placeholders.
 
-So there `might` need to be a special case for `array_fill()`+`implode()` or `str_repeat()`+`substr()` to create something like '?,?,?'
+So there `might` need to be a special case for `array_fill()`+`implode()` to create something like '?,?,?'
 
     $in_sql = implode(',', array_fill(0, count($ids), '?'));
-    
-    // or
-    
-    $in_sql = substr(str_repeat('?,', count($ids)), 0, -1);
 
 To be used with:
 
