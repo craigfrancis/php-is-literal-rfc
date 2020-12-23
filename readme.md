@@ -54,7 +54,7 @@ Flawed because `urlencode()` has not been used, e.g. `$name = 'A&B'`
 
 Flawed because the encoding is not guaranteed to be UTF-8 (or ISO-8859-1 before PHP 5.4), so the value could be corrupted.
 
-Also flawed because some browsers (e.g. IE 11), if the charset isn't defined (header or meta tag), could guess the output is UTF-7, e.g. `$url = '+ADw-script+AD4-alert(1)+ADw-+AC8-script+AD4-'`
+Also flawed because some browsers (e.g. IE 11), if the charset isn't defined (header or meta tag), could guess the output as UTF-7, e.g. `$url = '+ADw-script+AD4-alert(1)+ADw-+AC8-script+AD4-'`
 
     example.html:
         <img src={{ url }} alt='' />
@@ -72,7 +72,7 @@ Flawed because the value has not been quoted, e.g. `$id = 'id', or '1 OR 1=1'`
 
     $sql = 'SELECT 1 FROM user WHERE id="' . $mysqli->escape_string($id) . '"';
 
-Flawed if 'sql_mode' contains NO_BACKSLASH_ESCAPES, e.g. `$id = '2" or "1"="1'`
+Flawed if 'sql_mode' includes `NO_BACKSLASH_ESCAPES`, e.g. `$id = '2" or "1"="1'`
 
     $sql = 'INSERT INTO user (name) VALUES ("' . $mysqli->escape_string($name) . '")';
 
@@ -84,21 +84,26 @@ Flawed if 'SET NAMES latin1' has been used, and escape_string() uses 'utf8'.
     
     mail('a@example.com', 'Subject', 'Message', NULL, $parameters);
 
-Flawed because it's not possible to safely escape values to the `mail()` $additional_parameters, e.g. `$email = 'b@example.com -X/www/example.php'`
+Flawed because it's not possible to safely escape values in `$additional_parameters` for `mail()`, e.g. `$email = 'b@example.com -X/www/example.php'`
 
 ## Previous Solutions
 
 [Taint extension](https://github.com/laruence/taint) by Xinchen Hui, but this approach explicitly allows escaping, which doesn't address the issues listed above.
 
-[Automatic SQL Injection Protection](https://wiki.php.net/rfc/sql_injection_protection) by Matt Tait, where it was noted that "unfiltered input can affect way more than only SQL" ([Pierre Joye](https://news-web.php.net/php.internals/87355)), this amount of work isn't ideal for "just for one use case" ([Julien Pauli](https://news-web.php.net/php.internals/87647)). Where it would have effected every SQL function, such as `mysqli_query()`, `$pdo->query()`, `odbc_exec()`, etc (concerns raised by [Lester Caine](https://news-web.php.net/php.internals/87436) and [Anthony Ferrara](https://news-web.php.net/php.internals/87650)). Each of those functions would need a bypass for cases where unsafe SQL was intentionally being used (e.g. phpMyAdmin taking SQL from POST data) because some applications intentionally "pass raw, user submitted, SQL" (Ronald Chmara [1](https://news-web.php.net/php.internals/87406)/[2](https://news-web.php.net/php.internals/87446)).
+[Automatic SQL Injection Protection](https://wiki.php.net/rfc/sql_injection_protection) by Matt Tait, where it was noted:
 
-I also agree that "SQL injection is almost a solved problem [by using] prepared statements" ([Scott Arciszewski](https://news-web.php.net/php.internals/87400)), but we still need something that can identify mistakes.
+* "unfiltered input can affect way more than only SQL" ([Pierre Joye](https://news-web.php.net/php.internals/87355));
+* this amount of work isn't ideal for "just for one use case" ([Julien Pauli](https://news-web.php.net/php.internals/87647));
+* It would have effected every SQL function, such as `mysqli_query()`, `$pdo->query()`, `odbc_exec()`, etc (concerns raised by [Lester Caine](https://news-web.php.net/php.internals/87436) and [Anthony Ferrara](https://news-web.php.net/php.internals/87650));
+* Each of those functions would need a bypass for cases where unsafe SQL was intentionally being used (e.g. phpMyAdmin taking SQL from POST data) because some applications intentionally "pass raw, user submitted, SQL" (Ronald Chmara [1](https://news-web.php.net/php.internals/87406)/[2](https://news-web.php.net/php.internals/87446)).
+
+I also agree that "SQL injection is almost a solved problem [by using] prepared statements" ([Scott Arciszewski](https://news-web.php.net/php.internals/87400)), but we still need something to identify mistakes.
 
 ## Related JavaScript Implementation
 
-This proposal is taking some ideas from TC39, where a similar idea is being discussed for JavaScript, to support the introduction of Trusted Types.
+This RFC is taking some ideas from TC39, where a similar idea is being discussed for JavaScript, to support the introduction of Trusted Types.
 
-[https://github.com/tc39/proposal-array-is-template-object](https://github.com/tc39/proposal-array-is-template-object)
+[https://github.com/tc39/proposal-array-is-template-object](https://github.com/tc39/proposal-array-is-template-object)  
 [https://github.com/mikewest/tc39-proposal-literals](https://github.com/mikewest/tc39-proposal-literals)
 
 They are looking at "Distinguishing strings from a trusted developer, from strings that may be attacker controlled".
@@ -126,15 +131,11 @@ Literals are safe values, defined within the PHP scripts, for example:
     $a = 'WHERE id IN (' . implode(',', array_fill(0, $c, '?')) . ')';
     is_literal($a); // true, the odd one that involves functions.
     
-    $c = count($ids);
-    $a = 'WHERE id IN (' . substr(str_repeat('?,', $c), 0, -1) . ')';
-    is_literal($a); // false, probably, as substr is manipulating the string
-    
     $limit = 10;
     $a = 'LIMIT ' . ($limit + 1);
-    is_literal($a); // false, or could this one be allowed?
+    is_literal($a); // false, but might need some discussion.
 
-This uses a similar definition of [SafeConst](https://wiki.php.net/rfc/sql_injection_protection#safeconst) by Matt Tait, but it does not need to accept Integer or FloatingPoint variables as safe (unless it makes the implementation easier), nor should this proposal effect any existing functions.
+This uses a similar definition of [SafeConst](https://wiki.php.net/rfc/sql_injection_protection#safeconst) from Matt Tait's RFC, but it does not need to accept Integer or FloatingPoint variables as safe (unless it makes the implementation easier), nor should this proposal effect any existing functions.
 
 Thanks to [Xinchen Hui](https://news-web.php.net/php.internals/87396), we know the PHP5 Taint extension was complex, but "with PHP7's new zend_string, and string flags, the implementation will become easier".
 
@@ -142,9 +143,9 @@ And thanks to [Mark R](https://chat.stackoverflow.com/transcript/message/4892781
 
 Commands can be checked to ensure they are a "programmer supplied constant/static/validated string", and all other unsafe variables are provided separately (as noted by [Yasuo Ohgaki](https://news-web.php.net/php.internals/87725)).
 
-This approach allows systems/frameworks to decide if they want to **block**, **educate** (via a notice), or **ignore** these issues (to avoid the "don't nanny" concern raised by [Lester Caine](https://news-web.php.net/php.internals/87383)).
+This approach allows all systems/frameworks to decide if they want to **block**, **educate** (via a notice), or **ignore** these issues (to avoid the "don't nanny" concern raised by [Lester Caine](https://news-web.php.net/php.internals/87383)).
 
-Unlike the Taint extension, there must not be an equivalent `untaint()` function.
+Unlike the Taint extension, there must **not** be an equivalent `untaint()` function, or support any kind of escaping.
 
 ### Solution: SQL Injection
 
@@ -158,15 +159,15 @@ Database abstractions (e.g. ORMs) will be able to ensure they are provided with 
       ->where('u.id = ' . $_GET['id'])
       ->getQuery()
       ->getResult();
-
+    
     // example.php?id=u.id
 
-Where this mistake could be identified by:
+This mistake can be easily identified by:
 
     public function where($predicates)
     {
-        if (!is_literal($predicates)) {
-            throw new Exception('Can only accept a literal');
+        if (function_exists('is_literal') && !is_literal($predicates)) {
+            throw new Exception('->where() can only accept a literal');
         }
         ...
     }
@@ -235,9 +236,9 @@ To ensure `ORDER BY` can be set via the user, but only use acceptable values:
 
 ### Solution: SQL Injection, WHERE IN
 
-Most SQL strings can be a concatenations of literal values, but `WHERE x IN (?,?,?)` needs to use a variable number of literal placeholders.
+Most SQL strings can be a simple concatenations of literal values, but `WHERE x IN (?,?,?)` needs to use a variable number of literal placeholders.
 
-There needs to be a special case for `array_fill()`+`implode()`, so the is_literal state can be preserved, allowing us to create the literal string '?,?,?':
+There needs to be a special case for `array_fill()`+`implode()`, so the `is_literal` state can be preserved, allowing us to create the safe literal string '?,?,?':
 
     $in_sql = implode(',', array_fill(0, count($ids), '?'));
     
@@ -254,7 +255,7 @@ Rather than using functions such as:
 
 Frameworks (or PHP) could introduce something similar to `pcntl_exec()`, where arguments are provided separately.
 
-Or, take a verified literal for the command, and use parameters for the arguments (like SQL):
+Or, take a safe literal for the command, and use parameters for the arguments (like SQL does):
 
     $output = parameterised_exec('grep ? /path/to/file | wc -l', [
         'example',
@@ -318,7 +319,9 @@ Where the variables are supplied separately, in this example I'm using XPath:
     
     echo template_parse($template_html, $values);
 
-The templating engine can then accept and apply the supplied variables for the relevant context, for example:
+The templating engine can then accept and apply the supplied variables for the relevant context.
+
+As a simple example, this can be done with:
 
     function template_parse($html, $values) {
     
