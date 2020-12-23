@@ -412,15 +412,15 @@ Not sure
 
 On [GitHub](https://github.com/craigfrancis/php-is-literal-rfc/issues):
 
-    - Would this cause performance issues? Presumably not as bad a type checking.
-    - Can `array_fill()`+`implode()` pass though the "is_literal" flag for the "WHERE IN" case?
-    - Should the function be named `is_from_literal()`? (suggestion from [Jakob Givoni](https://news-web.php.net/php.internals/109197))
-    - Systems/Frameworks that define certain variables (e.g. table name prefixes) without the use of a literal (e.g. ini/json/yaml files), so they might need to make some changes to use this check, as originally noted by [Dennis Birkholz](https://news-web.php.net/php.internals/87667).
+- Would this cause performance issues? Presumably not as bad a type checking.
+- Can `array_fill()`+`implode()` pass though the "is_literal" flag for the "WHERE IN" case?
+- Should the function be named `is_from_literal()`? (suggestion from [Jakob Givoni](https://news-web.php.net/php.internals/109197))
+- Systems/Frameworks that define certain variables (e.g. table name prefixes) without the use of a literal (e.g. ini/json/yaml files), so they might need to make some changes to use this check, as originally noted by [Dennis Birkholz](https://news-web.php.net/php.internals/87667).
 
 ## Alternatives
 
-    - The current Taint Extension (notes above)
-	- Using static analysis (not at runtime), for example [psalm](https://psalm.dev/) (thanks [Tyson Andre](https://news-web.php.net/php.internals/109192)). But I can't find any which do these checks by default (if they even try), and we can't expect all programmers to use static analysis (especially those who have just stated).
+- The current Taint Extension (notes above)
+- Using static analysis (not at runtime), for example [psalm](https://psalm.dev/) (thanks [Tyson Andre](https://news-web.php.net/php.internals/109192)). But I can't find any which do these checks by default (if they even try), and we can't expect all programmers to use static analysis (especially those who have just stated).
 
 ## Unaffected PHP Functionality
 
