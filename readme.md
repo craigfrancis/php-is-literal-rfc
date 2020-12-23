@@ -10,51 +10,51 @@
 
 ## Introduction
 
-Add an `is_literal()` function, so developers/frameworks can check if a given variable has been created by safe literals.
+Add an `is_literal()` function, so developers/frameworks can check if a given variable is *safe*.
 
-As in, at runtime, being able to check if a variable has been created by the trusted developer (defined within a PHP script).
+As in, at runtime, being able to check if a variable has been created by literals, defined within a PHP script, by a trusted developer.
 
-These checks can warn or completely block SQL Injection, Command Line Injection, and many cases of HTML Injection (aka XSS).
+This simple check can be used to warn or completely block SQL Injection, Command Line Injection, and many cases of HTML Injection (aka XSS).
 
 ## The Problem
 
-Concatenating strings and escaping is *very* error prone.
+Escaping strings for SQL, HTML, Commands, etc is *very* error prone.
 
 The vast majority of programmers should never do this (mistakes will be made).
 
 Unsafe values (often user supplied) *must* be kept separate (e.g. parameterised SQL), or be processed by something that understands the context (e.g. a HTML Templating Engine).
 
-This is primarily for security reasons, but it also stops data being corrupted.
+This is primarily for security reasons, but it also causes data to be damaged (e.g. ASCII/UTF-8 issues).
 
-For example:
+Take these mistakes:
 
     echo "<img src=" . htmlentities($url) . " alt='' />";
 
-Flawed because the attribute value is not quoted, e.g. $url = '/ onerror=alert(1)'
+Flawed because the attribute value is not quoted, e.g. `$url = '/ onerror=alert(1)'`
 
     echo "<img src='" . htmlentities($url) . "' alt='' />";
 
-Flawed because `htmlentities()` does not encode single quotes by default, e.g. $url = "/' onerror='alert(1)"
+Flawed because `htmlentities()` does not encode single quotes by default, e.g. `$url = "/' onerror='alert(1)"`
 
     echo '<a href="' . htmlentities($url) . '">Link</a>';
 
-Flawed because a link can include JavaScript, e.g. $url = 'javascript:alert(1)'
+Flawed because a link can include JavaScript, e.g. `$url = 'javascript:alert(1)'`
 
     <script>
       var url = "<?= addslashes($url) ?>";
     </script>
 
-Flawed because `addslashes()` is not aware of the HTML context, e.g. $url = '</script><script>alert(1)</script>'
+Flawed because `addslashes()` is not HTML context aware, e.g. `$url = '</script><script>alert(1)</script>'`
 
     echo '<a href="/path/?name=' . htmlentities($name) . '">Link</a>';
 
-Flawed because `urlencode()` has not been used, e.g. $name = 'A&B'
+Flawed because `urlencode()` has not been used, e.g. `$name = 'A&B'`
 
     <p><?= htmlentities($url) ?></p>
 
 Flawed because the encoding is not guaranteed to be UTF-8 (or ISO-8859-1 before PHP 5.4), so the value could be corrupted.
 
-Also flawed because some browsers (e.g. IE 11), if the charset isn't defined (header or meta tag), could guess the output is UTF-7, e.g. $url = '+ADw-script+AD4-alert(1)+ADw-+AC8-script+AD4-'
+Also flawed because some browsers (e.g. IE 11), if the charset isn't defined (header or meta tag), could guess the output is UTF-7, e.g. `$url = '+ADw-script+AD4-alert(1)+ADw-+AC8-script+AD4-'`
 
     example.html:
         <img src={{ url }} alt='' />
@@ -64,15 +64,15 @@ Also flawed because some browsers (e.g. IE 11), if the charset isn't defined (he
     
     echo $twig->render('example.html', ['url' => $url]);
 
-Flawed because Twig is not context aware (in this case, an unquoted HTML attribute), e.g. $url = '/ onerror=alert(1)'
+Flawed because Twig is not context aware (in this case, an unquoted HTML attribute), e.g. `$url = '/ onerror=alert(1)'`
 
     $sql = 'SELECT 1 FROM user WHERE id=' . $mysqli->escape_string($id);
 
-Flawed because the value has not been quoted, e.g. $id = 'id', or '1 OR 1=1'
+Flawed because the value has not been quoted, e.g. `$id = 'id', or '1 OR 1=1'`
 
     $sql = 'SELECT 1 FROM user WHERE id="' . $mysqli->escape_string($id) . '"';
 
-Flawed if 'sql_mode' contains NO_BACKSLASH_ESCAPES, e.g. $id = '2" or "1"="1'
+Flawed if 'sql_mode' contains NO_BACKSLASH_ESCAPES, e.g. `$id = '2" or "1"="1'`
 
     $sql = 'INSERT INTO user (name) VALUES ("' . $mysqli->escape_string($name) . '")';
 
@@ -84,7 +84,7 @@ Flawed if 'SET NAMES latin1' has been used, and escape_string() uses 'utf8'.
     
     mail('a@example.com', 'Subject', 'Message', NULL, $parameters);
 
-Flawed because it's not possible to safely escape values to the `mail()` $additional_parameters, e.g. $email = 'b@example.com -X/www/example.php'
+Flawed because it's not possible to safely escape values to the `mail()` $additional_parameters, e.g. `$email = 'b@example.com -X/www/example.php'`
 
 ## Previous Solutions
 
