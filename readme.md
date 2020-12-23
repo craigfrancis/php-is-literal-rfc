@@ -10,7 +10,7 @@
 
 ## Introduction
 
-Add an `is_literal()` function, so developers/frameworks can check if a given variable is *safe*.
+Add an `is_literal()` function, so developers/frameworks can check if a given variable is **safe**.
 
 As in, at runtime, being able to check if a variable has been created by literals, defined within a PHP script, by a trusted developer.
 
@@ -18,7 +18,7 @@ This simple check can be used to warn or completely block SQL Injection, Command
 
 ## The Problem
 
-Escaping strings for SQL, HTML, Commands, etc is *very* error prone.
+Escaping strings for SQL, HTML, Commands, etc is **very** error prone.
 
 The vast majority of programmers should never do this (mistakes will be made).
 
@@ -410,15 +410,17 @@ Not sure
 
 ## Open Issues
 
-    - Would this cause performance issues?
+On [GitHub](https://github.com/craigfrancis/php-is-literal-rfc/issues):
+
+    - Would this cause performance issues? Presumably not as bad a type checking.
     - Can `array_fill()`+`implode()` pass though the "is_literal" flag for the "WHERE IN" case?
     - Should the function be named `is_from_literal()`? (suggestion from [Jakob Givoni](https://news-web.php.net/php.internals/109197))
-    - Systems/Frameworks that define certain variables (e.g. table name prefixes) without the use of a literal (e.g. ini/json/yaml files), might need to make some changes to use this check, as originally noted by [Dennis Birkholz](https://news-web.php.net/php.internals/87667).
+    - Systems/Frameworks that define certain variables (e.g. table name prefixes) without the use of a literal (e.g. ini/json/yaml files), so they might need to make some changes to use this check, as originally noted by [Dennis Birkholz](https://news-web.php.net/php.internals/87667).
 
 ## Alternatives
 
     - The current Taint Extension (notes above)
-    - Using static analysis (not at runtime), for example [psalm](https://psalm.dev/) (thanks [Tyson Andre](https://news-web.php.net/php.internals/109192)). But I can't find any tools which do anything like this, and we can't expect all programmers (especially those who have just stated) to use static analysis.
+	- Using static analysis (not at runtime), for example [psalm](https://psalm.dev/) (thanks [Tyson Andre](https://news-web.php.net/php.internals/109192)). But I can't find any which do these checks by default (if they even try), and we can't expect all programmers to use static analysis (especially those who have just stated).
 
 ## Unaffected PHP Functionality
 
@@ -427,6 +429,8 @@ Not sure
 ## Future Scope
 
 Certain functions (`mysqli_query`, `preg_match`, etc) could use this information to generate a error/warning/notice.
+
+PHP could also have a mode where output (e.g. `echo '<html>'`) is blocked, and this can be bypassed (maybe via `ini_set`) when the HTML Templating Engine has created the correctly encoded output.
 
 ## Proposed Voting Choices
 
