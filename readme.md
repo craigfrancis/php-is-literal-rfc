@@ -22,11 +22,15 @@ Escaping strings for SQL, HTML, Commands, etc is **very** error prone.
 
 The vast majority of programmers should never do this (mistakes will be made).
 
-Unsafe values (often user supplied) *must* be kept separate (e.g. parameterised SQL), or be processed by something that understands the context (e.g. a HTML Templating Engine).
+Unsafe values (often user supplied) **must** be kept separate (e.g. parameterised SQL), or be processed by something that understands the context (e.g. a HTML Templating Engine).
 
-This is primarily for security reasons, but it also causes data to be damaged (e.g. ASCII/UTF-8 issues).
+This is primarily for security reasons, but it can also cause data to be damaged (e.g. ASCII/UTF-8 issues).
 
-Take these mistakes:
+Take these mistakes, where the value has come from the user:
+
+    echo "<img src=" . $url . " alt='' />";
+
+Flawed, and unfortunately very common, a classic XSS vulnerability.
 
     echo "<img src=" . htmlentities($url) . " alt='' />";
 
