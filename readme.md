@@ -131,9 +131,9 @@ I also agree that "SQL injection is almost a solved problem [by using] prepared 
 
 As discussed by [Christoph Kern (Google) in 2015](https://www.usenix.org/conference/usenixsecurity15/symposium-program/presentation/kern), this approach works.
 
-The Go language can do this by checking for "compile time constants" (which isn't as good as this solution, e.g. the WHERE IN issue).
+The Go language can do this by checking for "compile time constants", which isn't as good as a run time solution (e.g. the `WHERE IN` issue), but it does work.
 
-Where Google can currently find most issues in [HTML](https://blogtitle.github.io/go-safe-html/) and [SQL](https://github.com/google/go-safeweb/tree/master/safesql).
+Google currently avoids most issues by using [go-safe-html](https://blogtitle.github.io/go-safe-html/) and [safesql](https://github.com/google/go-safeweb/tree/master/safesql).
 
 ## Related JavaScript Implementation
 
