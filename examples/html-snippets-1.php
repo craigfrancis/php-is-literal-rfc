@@ -41,6 +41,15 @@
 	echo ht('<img src="?" width="?" height="?" alt="?" />', [$img, $size, $size, $alt]);
 
 //--------------------------------------------------
+// Using as a template
+
+	$ht = ht('[<strong>?</strong>]');
+
+	echo $ht->html([$name]);
+	echo $ht->html([$class]);
+	echo $ht->html([$size]);
+
+//--------------------------------------------------
 // Complicated example
 
 	$html = '';
