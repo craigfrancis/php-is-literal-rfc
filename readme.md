@@ -29,45 +29,45 @@ This is primarily for security reasons, but it can also cause data to be damaged
 Take these mistakes, where the value has come from the user:
 
 ```php
-    echo "<img src=" . $url . " alt='' />";
+echo "<img src=" . $url . " alt='' />";
 ```
 
 Flawed, and unfortunately very common, a classic XSS vulnerability.
 
 ```php
-    echo "<img src=" . htmlentities($url) . " alt='' />";
+echo "<img src=" . htmlentities($url) . " alt='' />";
 ```
 
 Flawed because the attribute value is not quoted, e.g. `$url = '/ onerror=alert(1)'`
 
 ```php
-    echo "<img src='" . htmlentities($url) . "' alt='' />";
+echo "<img src='" . htmlentities($url) . "' alt='' />";
 ```
 
 Flawed because `htmlentities()` does not encode single quotes by default, e.g. `$url = "/' onerror='alert(1)"`
 
 ```php
-    echo '<a href="' . htmlentities($url) . '">Link</a>';
+echo '<a href="' . htmlentities($url) . '">Link</a>';
 ```
 
 Flawed because a link can include JavaScript, e.g. `$url = 'javascript:alert(1)'`
 
 ```html
-    <script>
-      var url = "<?= addslashes($url) ?>";
-    </script>
+<script>
+  var url = "<?= addslashes($url) ?>";
+</script>
 ```
 
 Flawed because `addslashes()` is not HTML context aware, e.g. `$url = '</script><script>alert(1)</script>'`
 
 ```php
-    echo '<a href="/path/?name=' . htmlentities($name) . '">Link</a>';
+echo '<a href="/path/?name=' . htmlentities($name) . '">Link</a>';
 ```
 
 Flawed because `urlencode()` has not been used, e.g. `$name = 'A&B'`
 
 ```html
-    <p><?= htmlentities($url) ?></p>
+<p><?= htmlentities($url) ?></p>
 ```
 
 Flawed because the encoding is not guaranteed to be UTF-8 (or ISO-8859-1 before PHP 5.4), so the value could be corrupted.
@@ -75,41 +75,41 @@ Flawed because the encoding is not guaranteed to be UTF-8 (or ISO-8859-1 before 
 Also flawed because some browsers (e.g. IE 11), if the charset isn't defined (header or meta tag), could guess the output as UTF-7, e.g. `$url = '+ADw-script+AD4-alert(1)+ADw-+AC8-script+AD4-'`
 
 ```php
-    example.html:
-        <img src={{ url }} alt='' />
-    
-    $loader = new \Twig\Loader\FilesystemLoader('./templates/');
-    $twig = new \Twig\Environment($loader, ['autoescape' => 'name']);
-    
-    echo $twig->render('example.html', ['url' => $url]);
+example.html:
+    <img src={{ url }} alt='' />
+
+$loader = new \Twig\Loader\FilesystemLoader('./templates/');
+$twig = new \Twig\Environment($loader, ['autoescape' => 'name']);
+
+echo $twig->render('example.html', ['url' => $url]);
 ```
 
 Flawed because Twig is not context aware (in this case, an unquoted HTML attribute), e.g. `$url = '/ onerror=alert(1)'`
 
 ```php
-    $sql = 'SELECT 1 FROM user WHERE id=' . $mysqli->escape_string($id);
+$sql = 'SELECT 1 FROM user WHERE id=' . $mysqli->escape_string($id);
 ```
 
 Flawed because the value has not been quoted, e.g. `$id = 'id', or '1 OR 1=1'`
 
 ```php
-    $sql = 'SELECT 1 FROM user WHERE id="' . $mysqli->escape_string($id) . '"';
+$sql = 'SELECT 1 FROM user WHERE id="' . $mysqli->escape_string($id) . '"';
 ```
 
 Flawed if 'sql_mode' includes `NO_BACKSLASH_ESCAPES`, e.g. `$id = '2" or "1"="1'`
 
 ```php
-    $sql = 'INSERT INTO user (name) VALUES ("' . $mysqli->escape_string($name) . '")';
+$sql = 'INSERT INTO user (name) VALUES ("' . $mysqli->escape_string($name) . '")';
 ```
 
 Flawed if 'SET NAMES latin1' has been used, and escape_string() uses 'utf8'.
 
 ```php
-    $parameters = "-f$email";
-    
-    // $parameters = '-f' . escapeshellarg($email);
-    
-    mail('a@example.com', 'Subject', 'Message', NULL, $parameters);
+$parameters = "-f$email";
+
+// $parameters = '-f' . escapeshellarg($email);
+
+mail('a@example.com', 'Subject', 'Message', NULL, $parameters);
 ```
 
 Flawed because it's not possible to safely escape values in `$additional_parameters` for `mail()`, e.g. `$email = 'b@example.com -X/www/example.php'`
@@ -141,28 +141,28 @@ They are looking at "Distinguishing strings from a trusted developer, from strin
 Literals are safe values, defined within the PHP scripts, for example:
 
 ```php
-    $a = 'Example';
-    is_literal($a); // true
-    
-    $a = 'Example ' . $a . ', ' . 5;
-    is_literal($a); // true
-    
-    $a = 'Example ' . $_GET['id'];
-    is_literal($a); // false
-    
-    $a = 'Example ' . time();
-    is_literal($a); // false
-    
-    $a = sprintf('LIMIT %d', 3);
-    is_literal($a); // false
-    
-    $c = count($ids);
-    $a = 'WHERE id IN (' . implode(',', array_fill(0, $c, '?')) . ')';
-    is_literal($a); // true, the odd one that involves functions.
-    
-    $limit = 10;
-    $a = 'LIMIT ' . ($limit + 1);
-    is_literal($a); // false, but might need some discussion.
+$a = 'Example';
+is_literal($a); // true
+
+$a = 'Example ' . $a . ', ' . 5;
+is_literal($a); // true
+
+$a = 'Example ' . $_GET['id'];
+is_literal($a); // false
+
+$a = 'Example ' . time();
+is_literal($a); // false
+
+$a = sprintf('LIMIT %d', 3);
+is_literal($a); // false
+
+$c = count($ids);
+$a = 'WHERE id IN (' . implode(',', array_fill(0, $c, '?')) . ')';
+is_literal($a); // true, the odd one that involves functions.
+
+$limit = 10;
+$a = 'LIMIT ' . ($limit + 1);
+is_literal($a); // false, but might need some discussion.
 ```
 
 This uses a similar definition of [SafeConst](https://wiki.php.net/rfc/sql_injection_protection#safeconst) from Matt Tait's RFC, but it does not need to accept Integer or FloatingPoint variables as safe (unless it makes the implementation easier), nor should this proposal effect any existing functions.
@@ -184,38 +184,38 @@ Database abstractions (e.g. ORMs) will be able to ensure they are provided with 
 [Doctrine](https://www.doctrine-project.org/projects/doctrine-orm/en/2.7/reference/query-builder.html#high-level-api-methods) could use this to ensure `->where($predicates)` is a literal:
 
 ```php
-    $users = $queryBuilder
-      ->select('u')
-      ->from('User', 'u')
-      ->where('u.id = ' . $_GET['id'])
-      ->getQuery()
-      ->getResult();
-    
-    // example.php?id=u.id
+$users = $queryBuilder
+  ->select('u')
+  ->from('User', 'u')
+  ->where('u.id = ' . $_GET['id'])
+  ->getQuery()
+  ->getResult();
+
+// example.php?id=u.id
 ```
 
 This mistake can be easily identified by:
 
 ```php
-    public function where($predicates)
-    {
-        if (function_exists('is_literal') && !is_literal($predicates)) {
-            throw new Exception('->where() can only accept a literal');
-        }
-        ...
+public function where($predicates)
+{
+    if (function_exists('is_literal') && !is_literal($predicates)) {
+        throw new Exception('->where() can only accept a literal');
     }
+    ...
+}
 ```
 
 [RedBean](https://redbeanphp.com/index.php?p=/finding) could check `$sql` is a literal:
 
 ```php
-    $users = R::find('user', 'id = ' . $_GET['id']);
+$users = R::find('user', 'id = ' . $_GET['id']);
 ```
 
 [PropelORM](http://propelorm.org/Propel/reference/model-criteria.html#relational-api) could check `$clause` is a literal:
 
 ```php
-    $users = UserQuery::create()->where('id = ' . $_GET['id'])->find();
+$users = UserQuery::create()->where('id = ' . $_GET['id'])->find();
 ```
 
 The `is_literal()` function could also be used internally by ORM developers, so they can be sure they have created their SQL strings out of literals. This would avoid mistakes such as the ORDER BY issues in the Zend framework [1](https://framework.zend.com/security/advisory/ZF2014-04)/[2](https://framework.zend.com/security/advisory/ZF2016-03).
@@ -225,43 +225,43 @@ The `is_literal()` function could also be used internally by ORM developers, so 
 A simple example:
 
 ```php
-    $sql = 'SELECT * FROM table WHERE id = ?';
-    
-    $result = $db->exec($sql, [$id]);
+$sql = 'SELECT * FROM table WHERE id = ?';
+
+$result = $db->exec($sql, [$id]);
 ```
 
 Checked in the framework by:
 
 ```php
-    class db {
-    
-      public function exec($sql, $parameters = []) {
-    
-        if (!is_literal($sql)) {
-          throw new Exception('SQL must be a literal.');
-        }
-    
-        $statement = $this->pdo->prepare($sql);
-        $statement->execute($parameters);
-        return $statement->fetchAll();
-    
-      }
-    
+class db {
+
+  public function exec($sql, $parameters = []) {
+
+    if (!is_literal($sql)) {
+      throw new Exception('SQL must be a literal.');
     }
+
+    $statement = $this->pdo->prepare($sql);
+    $statement->execute($parameters);
+    return $statement->fetchAll();
+
+  }
+
+}
 ```
 
 This also works with string concatenation:
 
 ```php
-    define('TABLE', 'example');
-    
-    $sql = 'SELECT * FROM ' . TABLE . ' WHERE id = ?';
-    
-      is_literal($sql); // Returns true
-    
-    $sql .= ' AND id = ' . $mysqli->escape_string($_GET['id']);
-    
-      is_literal($sql); // Returns false
+define('TABLE', 'example');
+
+$sql = 'SELECT * FROM ' . TABLE . ' WHERE id = ?';
+
+  is_literal($sql); // Returns true
+
+$sql .= ' AND id = ' . $mysqli->escape_string($_GET['id']);
+
+  is_literal($sql); // Returns false
 ```
 
 ### Solution: SQL Injection, ORDER BY
@@ -269,15 +269,15 @@ This also works with string concatenation:
 To ensure `ORDER BY` can be set via the user, but only use acceptable values:
 
 ```php
-    $order_fields = [
-        'name',
-        'created',
-        'admin',
-      ];
-    
-    $order_id = array_search(($_GET['sort'] ?? NULL), $order_fields);
-    
-    $sql = ' ORDER BY ' . $order_fields[$order_id];
+$order_fields = [
+    'name',
+    'created',
+    'admin',
+  ];
+
+$order_id = array_search(($_GET['sort'] ?? NULL), $order_fields);
+
+$sql = ' ORDER BY ' . $order_fields[$order_id];
 ```
 
 ### Solution: SQL Injection, WHERE IN
@@ -287,9 +287,9 @@ Most SQL strings can be a simple concatenations of literal values, but `WHERE x 
 There needs to be a special case for `array_fill()`+`implode()`, so the `is_literal` state can be preserved, allowing us to create the safe literal string '?,?,?':
 
 ```php
-    $in_sql = implode(',', array_fill(0, count($ids), '?'));
-    
-    $sql = 'SELECT * FROM table WHERE id IN (' . $in_sql . ')';
+$in_sql = implode(',', array_fill(0, count($ids), '?'));
+
+$sql = 'SELECT * FROM table WHERE id IN (' . $in_sql . ')';
 ```
 
 ### Solution: CLI Injection
@@ -306,40 +306,40 @@ Frameworks (or PHP) could introduce something similar to `pcntl_exec()`, where a
 Or, take a safe literal for the command, and use parameters for the arguments (like SQL does):
 
 ```php
-    $output = parameterised_exec('grep ? /path/to/file | wc -l', [
-        'example',
-      ]);
+$output = parameterised_exec('grep ? /path/to/file | wc -l', [
+    'example',
+  ]);
 ```
 
 Rough implementation:
 
 ```php
-    function parameterised_exec($cmd, $args = []) {
-    
-      if (!is_literal($cmd)) {
-        throw new Exception('The first argument must be a literal');
-      }
-    
-      $offset = 0;
-      $k = 0;
-      while (($pos = strpos($cmd, '?', $offset)) !== false) {
-        if (!isset($args[$k])) {
-          throw new Exception('Missing parameter "' . ($k + 1) . '"');
-          exit();
-        }
-        $arg = escapeshellarg($args[$k]);
-        $cmd = substr($cmd, 0, $pos) . $arg . substr($cmd, ($pos + 1));
-        $offset = ($pos + strlen($arg));
-        $k++;
-      }
-      if (isset($args[$k])) {
-        throw new Exception('Unused parameter "' . ($k + 1) . '"');
-        exit();
-      }
-    
-      return exec($cmd);
-    
+function parameterised_exec($cmd, $args = []) {
+
+  if (!is_literal($cmd)) {
+    throw new Exception('The first argument must be a literal');
+  }
+
+  $offset = 0;
+  $k = 0;
+  while (($pos = strpos($cmd, '?', $offset)) !== false) {
+    if (!isset($args[$k])) {
+      throw new Exception('Missing parameter "' . ($k + 1) . '"');
+      exit();
     }
+    $arg = escapeshellarg($args[$k]);
+    $cmd = substr($cmd, 0, $pos) . $arg . substr($cmd, ($pos + 1));
+    $offset = ($pos + strlen($arg));
+    $k++;
+  }
+  if (isset($args[$k])) {
+    throw new Exception('Unused parameter "' . ($k + 1) . '"');
+    exit();
+  }
+
+  return exec($cmd);
+
+}
 ```
 
 ### Solution: HTML Injection
@@ -349,32 +349,32 @@ Template engines should receive variables separately from the raw HTML.
 Often the engine will get the HTML from static files (safe):
 
 ```php
-    $html = file_get_contents('/path/to/template.html');
+$html = file_get_contents('/path/to/template.html');
 ```
 
 But small snippets of HTML are often easier to define as a literal within the PHP script:
 
 ```php
-    $template_html = '
-      <p>Hello <span id="username"></span></p>
-      <p><a>Website</a></p>';
+$template_html = '
+  <p>Hello <span id="username"></span></p>
+  <p><a>Website</a></p>';
 ```
 
 Where the variables are supplied separately, in this example I'm using XPath:
 
 ```php
-    $values = [
-        '//span[@id="username"]' => [
-            NULL      => 'Name', // The textContent
-            'class'   => 'admin',
-            'data-id' => '123',
-          ],
-        '//a' => [
-            'href' => 'https://example.com',
-          ],
-      ];
-    
-    echo template_parse($template_html, $values);
+$values = [
+    '//span[@id="username"]' => [
+        NULL      => 'Name', // The textContent
+        'class'   => 'admin',
+        'data-id' => '123',
+      ],
+    '//a' => [
+        'href' => 'https://example.com',
+      ],
+  ];
+
+echo template_parse($template_html, $values);
 ```
 
 The templating engine can then accept and apply the supplied variables for the relevant context.
@@ -382,68 +382,68 @@ The templating engine can then accept and apply the supplied variables for the r
 As a simple example, this can be done with:
 
 ```php
-    function template_parse($html, $values) {
-    
-      if (!is_literal($html)) {
-        throw new Exception('Invalid Template HTML.');
-      }
-    
-      $dom = new DomDocument();
-      $dom->loadHTML('<?xml encoding="UTF-8">' . $html);
-    
-      $xpath = new DOMXPath($dom);
-    
-      foreach ($values as $query => $attributes) {
-    
-        if (!is_literal($query)) {
-          throw new Exception('Invalid Template XPath.');
-        }
-    
-        foreach ($xpath->query($query) as $element) {
-          foreach ($attributes as $attribute => $value) {
-    
-            if (!is_literal($attribute)) {
-              throw new Exception('Invalid Template Attribute.');
-            }
-    
-            if ($attribute) {
-              $safe = false;
-              if ($attribute == 'href') {
-                if (preg_match('/^https?:\/\//', $value)) {
-                  $safe = true; // Not "javascript:..."
-                }
-              } else if ($attribute == 'class') {
-                if (in_array($value, ['admin', 'important'])) {
-                  $safe = true; // Only allow specific classes?
-                }
-              } else if (preg_match('/^data-[a-z]+$/', $attribute)) {
-                if (preg_match('/^[a-z0-9 ]+$/i', $value)) {
-                  $safe = true;
-                }
-              }
-              if ($safe) {
-                $element->setAttribute($attribute, $value);
-              }
-            } else {
-              $element->textContent = $value;
-            }
-    
-          }
-        }
-    
-      }
-    
-      $html = '';
-      $body = $dom->documentElement->firstChild;
-      if ($body->hasChildNodes()) {
-        foreach ($body->childNodes as $node) {
-          $html .= $dom->saveXML($node);
-        }
-      }
-    
-      return $html;
-    
+function template_parse($html, $values) {
+
+  if (!is_literal($html)) {
+    throw new Exception('Invalid Template HTML.');
+  }
+
+  $dom = new DomDocument();
+  $dom->loadHTML('<?xml encoding="UTF-8">' . $html);
+
+  $xpath = new DOMXPath($dom);
+
+  foreach ($values as $query => $attributes) {
+
+    if (!is_literal($query)) {
+      throw new Exception('Invalid Template XPath.');
     }
+
+    foreach ($xpath->query($query) as $element) {
+      foreach ($attributes as $attribute => $value) {
+
+        if (!is_literal($attribute)) {
+          throw new Exception('Invalid Template Attribute.');
+        }
+
+        if ($attribute) {
+          $safe = false;
+          if ($attribute == 'href') {
+            if (preg_match('/^https?:\/\//', $value)) {
+              $safe = true; // Not "javascript:..."
+            }
+          } else if ($attribute == 'class') {
+            if (in_array($value, ['admin', 'important'])) {
+              $safe = true; // Only allow specific classes?
+            }
+          } else if (preg_match('/^data-[a-z]+$/', $attribute)) {
+            if (preg_match('/^[a-z0-9 ]+$/i', $value)) {
+              $safe = true;
+            }
+          }
+          if ($safe) {
+            $element->setAttribute($attribute, $value);
+          }
+        } else {
+          $element->textContent = $value;
+        }
+
+      }
+    }
+
+  }
+
+  $html = '';
+  $body = $dom->documentElement->firstChild;
+  if ($body->hasChildNodes()) {
+    foreach ($body->childNodes as $node) {
+      $html .= $dom->saveXML($node);
+    }
+  }
+
+  return $html;
+
+}
 ```
 
 ## Backward Incompatible Changes
