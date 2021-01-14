@@ -127,6 +127,14 @@ Flawed because it's not possible to safely escape values in //$additional_parame
 
 I also agree that "SQL injection is almost a solved problem [by using] prepared statements" ([[https://news-web.php.net/php.internals/87400|Scott Arciszewski]]), but we still need something to identify mistakes.
 
+===== Related Go Implementation =====
+
+As discussed by [[https://www.usenix.org/conference/usenixsecurity15/symposium-program/presentation/kern|Christoph Kern (Google) in 2015]], this approach works.
+
+The Go language can do this by checking for "compile time constants" (which isn't as good as this solution, e.g. the WHERE IN issue).
+
+Where Google can currently find most issues in [[https://blogtitle.github.io/go-safe-html/|HTML]] and [[https://github.com/google/go-safeweb/tree/master/safesql|SQL]].
+
 ===== Related JavaScript Implementation =====
 
 This RFC is taking some ideas from TC39, where a similar idea is being discussed for JavaScript, to support the introduction of Trusted Types.
@@ -389,7 +397,7 @@ function template_parse($html, $values) {
   }
 
   $dom = new DomDocument();
-  $dom->loadHTML('<?xml encoding="UTF-8">' . $html);
+  $dom->loadHTML('<' . '?xml encoding="UTF-8">' . $html);
 
   $xpath = new DOMXPath($dom);
 
