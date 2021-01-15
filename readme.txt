@@ -129,7 +129,7 @@ I also agree that "SQL injection is almost a solved problem [by using] prepared 
 
 ===== Related Go Implementation =====
 
-As discussed by [[https://www.usenix.org/conference/usenixsecurity15/symposium-program/presentation/kern|Christoph Kern (Google) in 2015]], this approach works.
+As discussed by [[https://www.usenix.org/conference/usenixsecurity15/symposium-program/presentation/kern|Christoph Kern (Google) in 2015]] and in [[https://www.youtube.com/watch?v=ccfEu-Jj0as|2016]], this approach works.
 
 The Go language can do this by checking for "compile time constants", which isn't as good as a run time solution (e.g. the //WHERE IN// issue), but it does work.
 
