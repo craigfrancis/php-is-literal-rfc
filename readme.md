@@ -502,7 +502,7 @@ This check could be used to throw an exception, or generate an error/warning/not
 
 PHP could also have a mode where output (e.g. `echo '<html>'`) is blocked, and this can be bypassed (maybe via `ini_set`) when the HTML Templating Engine has created the correctly encoded output.
 
-And maybe there could be a [`is_figurative()`](https://chat.stackoverflow.com/transcript/message/51573091#51573091) function, which [MarkR](https://chat.stackoverflow.com/transcript/message/48927770#48927770) seems to really want :-)
+And maybe there could be a [is_figurative()](https://chat.stackoverflow.com/transcript/message/51573091#51573091) function, which [MarkR](https://chat.stackoverflow.com/transcript/message/48927770#48927770) seems to really want :-)
 
 ## Proposed Voting Choices
 
