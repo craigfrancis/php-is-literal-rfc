@@ -173,11 +173,11 @@ $a = 'LIMIT ' . ($limit + 1);
 is_literal($a); // false, but might need some discussion.
 ```
 
-This uses a similar definition of [SafeConst](https://wiki.php.net/rfc/sql_injection_protection#safeconst) from Matt Tait's RFC, but it does not need to accept Integer or FloatingPoint variables as safe (unless it makes the implementation easier), nor should this proposal effect any existing functions.
+This uses a similar definition of [SafeConst](https://wiki.php.net/rfc/sql_injection_protection#safeconst) from Matt Tait's RFC, but it doesn't need to accept Integer or FloatingPoint variables as safe (unless it makes the implementation easier), nor should this proposal effect any existing functions.
 
-Thanks to [Xinchen Hui](https://news-web.php.net/php.internals/87396), we know the PHP5 Taint extension was complex, but "with PHP7's new zend_string, and string flags, the implementation will become easier".
+Thanks to [NikiC](https://chat.stackoverflow.com/transcript/message/51565346#51565346), it looks like we can reuse the GC_PROTECTED flag for strings.
 
-And thanks to [Mark R](https://chat.stackoverflow.com/transcript/message/48927813#48927813), it might be possible to use the fact that "interned strings in PHP have a flag", which is there because these "can't be freed".
+As an aside, [Xinchen Hui](https://news-web.php.net/php.internals/87396) found the Taint extension was complex in PHP5, but "with PHP7's new zend_string, and string flags, the implementation will become easier". Also, [MarkR](https://chat.stackoverflow.com/transcript/message/48927813#48927813) suggested that it might be possible to use the fact that "interned strings in PHP have a flag", which is there because these "can't be freed".
 
 Commands can be checked to ensure they are a "programmer supplied constant/static/validated string", and all other unsafe variables are provided separately (as noted by [Yasuo Ohgaki](https://news-web.php.net/php.internals/87725)).
 
@@ -496,9 +496,13 @@ Not sure
 
 ## Future Scope
 
-Certain functions (`mysqli_query`, `preg_match`, etc) could use this information to generate a error/warning/notice.
+As noted by [MarkR](https://chat.stackoverflow.com/transcript/message/51573226#51573226), the benefit will come when it can be used by PDO and similar functions (`mysqli_query`, `preg_match`, etc).
+
+This check could be used to throw an exception, or generate an error/warning/notice, providing a way for PHP to teach new programmers, and/or completely block unsafe values in SQL, HTML, CLI, etc.
 
 PHP could also have a mode where output (e.g. `echo '<html>'`) is blocked, and this can be bypassed (maybe via `ini_set`) when the HTML Templating Engine has created the correctly encoded output.
+
+And maybe there could be a [`is_figurative()`](https://chat.stackoverflow.com/transcript/message/51573091#51573091) function, which [MarkR](https://chat.stackoverflow.com/transcript/message/48927770#48927770) seems to really want :-)
 
 ## Proposed Voting Choices
 
@@ -506,11 +510,11 @@ N/A
 
 ## Patches and Tests
 
-A volunteer is needed to help with implementation.
+N/A
 
 ## Implementation
 
-N/A
+[Danack](https://github.com/Danack/) has [started an implementation](https://github.com/php/php-src/compare/master...Danack:is_literal_attempt_two).
 
 ## Rejected Features
 
