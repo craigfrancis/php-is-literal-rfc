@@ -97,7 +97,7 @@ $twig = new \Twig\Environment($loader, ['autoescape' => 'name']);
 echo $twig->render('example.html', ['url' => $url]);
 ```
 
-Flawed because Twig is not context aware (in this case, an unquoted HTML attribute); e.g. `$url = '/ onerror=alert(1)'`
+Flawed because [Twig is not context aware](https://github.com/twigphp/Twig/issues/3394) (in this case, an unquoted HTML attribute); e.g. `$url = '/ onerror=alert(1)'`
 
 ```php
 $sql = 'SELECT 1 FROM user WHERE id=' . $mysqli->escape_string($id);
