@@ -1,8 +1,8 @@
 # PHP RFC: Is Literal Check
 
-* Version: 0.2
+* Version: 0.3
 * Date: 2020-03-21
-* Updated: 2020-12-22
+* Updated: 2021-02-19
 * Author: Craig Francis, craig#at#craigfrancis.co.uk
 * Status: Draft
 * First Published at: https://wiki.php.net/rfc/is_literal
@@ -16,7 +16,9 @@ As in, at runtime, being able to check if a variable has been created by literal
 
 This simple check can be used to warn or completely block SQL Injection, Command Line Injection, and many cases of HTML Injection (aka XSS).
 
-See the [justification for why this is important](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md); but in short, abstractions like [Doctrine could protect itself against common mistakes](https://www.doctrine-project.org/projects/doctrine-orm/en/2.7/reference/security.html) like this:
+See the [justification for why this is important](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md).
+
+But, in short, abstractions like [Doctrine could protect itself against common mistakes](https://www.doctrine-project.org/projects/doctrine-orm/en/2.7/reference/security.html) like this:
 
 ```php
 $query = $em->createQuery('SELECT u FROM User u WHERE u.id = ' . $_GET['id']);
@@ -24,7 +26,7 @@ $query = $em->createQuery('SELECT u FROM User u WHERE u.id = ' . $_GET['id']);
 
 ## Proposal
 
-Literals are safe values, defined within the PHP scripts, for example:
+Literals are safe values, defined within the PHP script, for example:
 
 ```php
 $a = 'Example';
@@ -119,7 +121,7 @@ This check could be used to throw an exception, or generate an error/warning/not
 
 PHP could also have a mode where output (e.g. `echo '<html>'`) is blocked, and this can be bypassed (maybe via `ini_set`) when the HTML Templating Engine has created the correctly encoded output.
 
-And, for a bit of silliness, there could be a [is_figurative()](https://chat.stackoverflow.com/transcript/message/51573091#51573091) function, which [MarkR](https://chat.stackoverflow.com/transcript/message/48927770#48927770) seems to really want :-)
+And, for a bit of silliness, there could be a `is_figurative()` function, which MarkR seems to [really](https://chat.stackoverflow.com/transcript/message/48927770#48927770), [want](https://chat.stackoverflow.com/transcript/message/51573091#51573091) :-)
 
 ## Proposed Voting Choices
 
