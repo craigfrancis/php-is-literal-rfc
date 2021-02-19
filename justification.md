@@ -172,7 +172,7 @@ is_literal($a); // false
 
 $c = count($ids);
 $a = 'WHERE id IN (' . implode(',', array_fill(0, $c, '?')) . ')';
-is_literal($a); // true, the odd one that involves functions.
+is_literal($a); // true, the only one that involves functions.
 
 $limit = 10;
 $a = 'LIMIT ' . ($limit + 1);
