@@ -35,7 +35,7 @@ Or this [DQL](https://www.doctrine-project.org/projects/doctrine-orm/en/2.7/refe
 $query = $em->createQuery('SELECT u FROM User u WHERE u.id = ' . $_GET['id']);
 ```
 
-By mixing strings from a trusted developer, with values that are user (attacker) controlled, we have a problem.
+By mixing strings from a trusted developer (literals), with values that are user (attacker) controlled, we have a problem.
 
 ## Common Mistakes
 
@@ -131,7 +131,7 @@ Flawed because it's not possible to safely escape values in `$additional_paramet
 
 We need to distinguish between strings from a trusted developer, from those that could be attacker controlled.
 
-This will allow libraries / frameworks to protect against common mistakes; and in the future, for PHP itself to check for (and ideally enforce) these checks.
+This will allow libraries / frameworks to protect against common mistakes; and, in the future, for PHP itself to check for these mistakes.
 
 ## Go Implementation
 
