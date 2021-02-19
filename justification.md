@@ -103,7 +103,7 @@ Flawed because [Twig is not context aware](https://github.com/twigphp/Twig/issue
 $sql = 'SELECT 1 FROM user WHERE id=' . $mysqli->escape_string($id);
 ```
 
-Flawed because the value has not been quoted; e.g. `$id = 'id', or '1 OR 1=1'`
+Flawed because the value has not been quoted; e.g. `$id = 'id'`, or `$id = '1 OR 1=1'`
 
 ```php
 $sql = 'SELECT 1 FROM user WHERE id="' . $mysqli->escape_string($id) . '"';
