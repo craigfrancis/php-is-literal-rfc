@@ -161,28 +161,28 @@ They are looking at "Distinguishing strings from a trusted developer, from strin
 Literals are safe values, defined within the PHP scripts, for example:
 
 ```php
+is_literal('Example'); // true
+
 $a = 'Example';
 is_literal($a); // true
 
-$a = 'Example ' . $a . ', ' . 5;
-is_literal($a); // true
+is_literal(4); // true
+is_literal(0.3); // true
+is_literal('a' . 'b'); // true, compiler can concatenate
 
-$a = 'Example ' . $_GET['id'];
-is_literal($a); // false
+$a = 'A';
+$b = $a . ' B ' . 3;
+is_literal($b); // true, ideally (more details below)
 
-$a = 'Example ' . time();
-is_literal($a); // false
+is_literal($_GET['id']); // false
 
-$a = sprintf('LIMIT %d', 3);
-is_literal($a); // false
+is_literal(rand(0, 10)); // false
+
+is_literal(sprintf('LIMIT %d', 3)); // false
 
 $c = count($ids);
 $a = 'WHERE id IN (' . implode(',', array_fill(0, $c, '?')) . ')';
-is_literal($a); // true, the only one that involves functions.
-
-$limit = 10;
-$a = 'LIMIT ' . ($limit + 1);
-is_literal($a); // false, but might need some discussion.
+is_literal($a); // true, the one exception that involves functions.
 ```
 
 This allows us to ensure commands are a "programmer supplied constant/static/validated string", with all unsafe variables being provided separately (as noted by [Yasuo Ohgaki](https://news-web.php.net/php.internals/87725)).
