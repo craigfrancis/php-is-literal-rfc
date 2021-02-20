@@ -313,14 +313,19 @@ $html = file_get_contents('/path/to/template.html');
 But small snippets of HTML are often easier to define as a literal within the PHP script:
 
 ```php
+$url = url('/example/path/', ['name' => $name]);
+echo ht('<a href="?">?</a>', [$url, $name]);
+```
+
+Where the variables are supplied separately, in this example the [ht()](./examples/html-snippets/html-template.php) function understands that it must accept a safe [URL object](./examples/html-snippets/url.php) for the link.
+
+Or, how about this [template_xpath()](./examples/html-template-xpath.php) example:
+
+```php
 $template_html = '
   <p>Hello <span id="username"></span></p>
   <p><a>Website</a></p>';
-```
 
-Where the variables are supplied separately, in this example using XPath to apply them via this example [template_xpath()](./examples/html-template-xpath.php) function:
-
-```php
 echo template_xpath($template_html, [
     '//span[@id="username"]' => [
         NULL      => 'Name', // The textContent
