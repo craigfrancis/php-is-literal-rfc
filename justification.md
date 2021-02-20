@@ -314,6 +314,7 @@ But small snippets of HTML are often easier to define as a literal within the PH
 
 ```php
 $url = url('/example/path/', ['name' => $name]);
+
 echo ht('<a href="?">?</a>', [$url, $name]);
 ```
 
