@@ -151,7 +151,7 @@ Google currently avoids most issues by using [go-safe-html](https://blogtitle.gi
 
 This solution is taking some ideas from TC39, where a similar idea is being discussed for JavaScript, to support the introduction of Trusted Types.
 
-[https://github.com/tc39/proposal-array-is-template-object](https://github.com/tc39/proposal-array-is-template-object)
+[https://github.com/tc39/proposal-array-is-template-object](https://github.com/tc39/proposal-array-is-template-object)  
 [https://github.com/mikewest/tc39-proposal-literals](https://github.com/mikewest/tc39-proposal-literals)
 
 They are looking at "Distinguishing strings from a trusted developer, from strings that may be attacker controlled".
