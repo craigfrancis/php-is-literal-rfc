@@ -29,29 +29,31 @@ $query = $em->createQuery('SELECT u FROM User u WHERE u.id = ' . $_GET['id']);
 Literals are safe values, defined within the PHP script, for example:
 
 ```php
+is_literal('Example'); // true
+
 $a = 'Example';
 is_literal($a); // true
 
-$a = 'Example ' . $a . ', ' . 5;
-is_literal($a); // true
+is_literal(4); // true
+is_literal(0.3); // true
+is_literal('a' . 'b'); // true, compiler can concatenate
 
-$a = 'Example ' . $_GET['id'];
-is_literal($a); // false
+$a = 'A';
+$b = $a . ' B ' . 3;
+is_literal($b); // true, ideally (more details below)
 
-$a = 'Example ' . time();
-is_literal($a); // false
+is_literal($_GET['id']); // false
 
-$a = sprintf('LIMIT %d', 3);
-is_literal($a); // false
+is_literal(rand(0, 10)); // false
+
+is_literal(sprintf('LIMIT %d', 3)); // false
 
 $c = count($ids);
 $a = 'WHERE id IN (' . implode(',', array_fill(0, $c, '?')) . ')';
-is_literal($a); // true, the odd one that involves functions.
-
-$limit = 10;
-$a = 'LIMIT ' . ($limit + 1);
-is_literal($a); // false, but might need some discussion.
+is_literal($a); // true, the one exception that involves functions.
 ```
+
+Ideally string concatenation would be allowed, but [Danack](https://github.com/Danack/RfcLiteralString/issues/5) suggested this might raise performance concerns, and an array implode like function could be used instead (or a query builder).
 
 This uses a similar definition of [SafeConst](https://wiki.php.net/rfc/sql_injection_protection#safeconst) from Matt Tait's RFC, but it doesn't need to accept Integer or FloatingPoint variables as safe (unless it makes the implementation easier), nor should this proposal effect any existing functions.
 
@@ -65,7 +67,7 @@ Unlike the Taint extension, there must **not** be an equivalent `untaint()` func
 
 There is the [Taint extension](https://github.com/laruence/taint) by Xinchen Hui, but this approach explicitly allows escaping, which doesn't address all issues.
 
-Google currently uses a [similar approach in Go](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md#go-implementation) with the use of "compile time constants"; and there are [discussions with it happening in JavaScript](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md#javascript-implementation).
+Google currently uses a [similar approach in Go](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md#go-implementation) with the use of "compile time constants"; and there are [discussions about adding it to JavaScript](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md#javascript-implementation).
 
 It might be possible to use static analysis, for example [psalm](https://psalm.dev/) (thanks [Tyson Andre](https://news-web.php.net/php.internals/109192)). But I can't find any which do these checks by default, they are likely to miss things that happen at runtime, and we can't expect all programmers to use static analysis (especially those who have just stated, who need this more than developers who know the concepts and just make the odd mistake).
 
@@ -104,10 +106,10 @@ Not sure
 
 On [GitHub](https://github.com/craigfrancis/php-is-literal-rfc/issues):
 
+- Should this be named something else? ([Jakob Givoni](https://news-web.php.net/php.internals/109197) suggested `is_from_literal`).
 - Would this cause performance issues?
 - Can `array_fill()`+`implode()` pass though the "is_literal" flag for the "WHERE IN" case?
-- Should the function be named something else? ([Jakob Givoni](https://news-web.php.net/php.internals/109197) suggested `is_from_literal`).
-- Systems/Frameworks that define certain variables (e.g. table name prefixes) without the use of a literal (e.g. ini/json/yaml files), might need to make some changes to use this check, as originally noted by [Dennis Birkholz](https://news-web.php.net/php.internals/87667).
+- Systems/Frameworks that define certain variables (e.g. table name prefixes) without the use of a literal (e.g. ini/json/yaml files), they might need to make some changes to use this check, as originally noted by [Dennis Birkholz](https://news-web.php.net/php.internals/87667).
 
 ## Unaffected PHP Functionality
 
@@ -115,13 +117,13 @@ Not sure
 
 ## Future Scope
 
-As noted by [MarkR](https://chat.stackoverflow.com/transcript/message/51573226#51573226), the benefit will come when it can be used by PDO and similar functions (`mysqli_query`, `preg_match`, etc).
+As noted by [MarkR](https://chat.stackoverflow.com/transcript/message/51573226#51573226), the biggest benefit will come when it can be used by PDO and similar functions (`mysqli_query`, `preg_match`, `exec`, etc). But the basic idea can be used immediately by frameworks and general abstraction libraries, and they can give feedback for phase 2.
 
 This check could be used to throw an exception, or generate an error/warning/notice, providing a way for PHP to teach new programmers, and/or completely block unsafe values in SQL, HTML, CLI, etc.
 
-PHP could also have a mode where output (e.g. `echo '<html>'`) is blocked, and this can be bypassed (maybe via `ini_set`) when the HTML Templating Engine has created the correctly encoded output.
+PHP could have a mode where output (e.g. `echo '<html>'`) is blocked, and this can be bypassed (maybe via `ini_set`) when the HTML Templating Engine has created the correctly encoded output.
 
-And, for a bit of silliness, there could be a `is_figurative()` function, which MarkR seems to [really](https://chat.stackoverflow.com/transcript/message/48927770#48927770), [want](https://chat.stackoverflow.com/transcript/message/51573091#51573091) :-)
+And, for a bit of silliness (Spaß ist verboten), there could be a `is_figurative()` function, which MarkR seems to [really](https://chat.stackoverflow.com/transcript/message/48927770#48927770), [want](https://chat.stackoverflow.com/transcript/message/51573091#51573091) :-)
 
 ## Proposed Voting Choices
 
