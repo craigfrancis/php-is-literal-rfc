@@ -137,7 +137,7 @@ Flawed because it's not possible to safely escape values in `$additional_paramet
 
 We need to distinguish between strings from a trusted developer, from those that could be attacker controlled.
 
-This will allow libraries / frameworks to protect against common mistakes; and, in the future, for PHP itself to check for these mistakes.
+This will allow libraries / frameworks to protect against common mistakes; and, in the future, for PHP itself to check as well.
 
 ## Go Implementation
 
