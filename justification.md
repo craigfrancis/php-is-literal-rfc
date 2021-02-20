@@ -318,7 +318,7 @@ $url = url('/example/path/', ['name' => $name]);
 echo ht('<a href="?">?</a>', [$url, $name]);
 ```
 
-In this example the [ht()](./examples/html-snippets/html-template.php) function takes the HTML literal as the first argument, parameterised values second, and understands that it must accept a safe [URL object](./examples/html-snippets/url.php) for the link (not 'javascript:').
+In this example the [ht()](./examples/html-snippets/html-template.php?ts=4) function takes the HTML literal as the first argument, parameterised values second, and understands that it must accept a safe [URL object](./examples/html-snippets/url.php?ts=4) for the link (not 'javascript:').
 
 Or, how about this [template_xpath()](./examples/html-template-xpath.php) example:
 
