@@ -71,14 +71,18 @@
 					$this->parameters = $parameters;
 
 				//--------------------------------------------------
-				// Simple Template HTML split
+				// Template HTML
+
+					if (!is_literal($template_html)) {
+						throw new Exception('Invalid Template HTML.');
+					}
 
 						// This does not intend to be a full/proper templating system.
 						// The context of the placeholders is only roughly checked, when in debug mode, via XML parsing.
 						// It uses a RegExp, which is bad for general HTML, but it's fast, and can work with known-good XHTML (in theory).
 						// The HTML must be a safe literal (a trusted string, from the developer, defined in the PHP script).
 						// The HTML must be valid XML (why be lazy/messy?).
-						// The HTML must include parameters in a Quoted Attribute, or it's own HTML Tag.
+						// The parameters must be in a Quoted Attribute, or their own HTML Tag.
 						// It only uses simple HTML Encoding - which is why attributes must be quoted, to avoid '<img src=? />' being used with 'x onerror=evil-js'
 
 					$this->template_html = preg_split('/(?<=(>)|(\'|"))\?(?=(?(1)<|\2))/', $template_html);
