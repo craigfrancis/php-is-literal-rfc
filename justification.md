@@ -318,9 +318,7 @@ $template_html = '
   <p><a>Website</a></p>';
 ```
 
-Maybe a [template_xpath()](./examples/html-template-xpath.php) function, which takes a safe literal for the HTML, and maybe uses XPath to set values:
-
-Where the variables are supplied separately, in this example using XPath:
+Where the variables are supplied separately, in this example using XPath to apply them via this example [template_xpath()](./examples/html-template-xpath.php) function:
 
 ```php
 echo template_xpath($template_html, [
