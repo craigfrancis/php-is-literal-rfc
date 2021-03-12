@@ -207,7 +207,7 @@ public function where($predicates)
 }
 ```
 
-Eloquent in Laravel could check [`DB::raw()`](https://laravel.com/docs/8.x/queries#raw-expressions) is provided with a safe literal; and `$query` in [`DB::select()`](https://laravel.com/docs/8.x/database#running-a-select-query) is also a literal:
+Eloquent in Laravel could check [`DB::raw()`](https://laravel.com/docs/8.x/queries#raw-expressions) is provided with a safe literal; likewise [`DB::select()`](https://laravel.com/docs/8.x/database#running-a-select-query):
 
 ```php
 $users = DB::select('select * from users where active = ' . $_GET['active']);
