@@ -117,7 +117,7 @@ Not sure
 
 On [GitHub](https://github.com/craigfrancis/php-is-literal-rfc/issues):
 
-- Should this be named something else? ([Jakob Givoni](https://news-web.php.net/php.internals/109197) suggested `is_from_literal`).
+- Name it something else? [Jakob Givoni](https://news-web.php.net/php.internals/109197) suggested `is_from_literal()`; or maybe `is_safe()`.
 - Would this cause performance issues?
 - Can `array_fill()`+`implode()` pass though the "is_literal" flag for the "WHERE IN" case?
 - Systems/Frameworks that define certain variables (e.g. table name prefixes) without the use of a literal (e.g. ini/json/yaml files), they might need to make some changes to use this check, as originally noted by [Dennis Birkholz](https://news-web.php.net/php.internals/87667).
@@ -132,7 +132,7 @@ As noted by [MarkR](https://chat.stackoverflow.com/transcript/message/51573226#5
 
 **Phase 2** could introduce a way for certain function arguments to only accept safe literals, and/or specific value-objects the project trusts (this idea comes from [Trusted Types](https://web.dev/trusted-types/) in JavaScript).
 
-For example, a project could require the second argument for `pg_query()` to only accept literals or their `query_builder` object (which provides a `__toString` method); and that any output (print, echo, readfile, etc) must use the `html_output` object that's returned by their trusted HTML Templating system (using `ob_start` might be useful here).
+For example, a project could require the second argument for `pg_query()` to only accept literals or their `query_builder` object (which provides a `__toString` method); and that any output (print, echo, readfile, etc) must use the `html_output` object that's returned by their trusted HTML Templating system (using `ob_start()` might be useful here).
 
 **Phase 3** could set a default of 'only literals' for all of the relevant PHP function arguments, so developers are given a warning, and later prevented (via an exception), when they provide an unsafe value to those functions (they could still specify that unsafe values are allowed, e.g. phpMyAdmin).
 
