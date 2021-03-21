@@ -139,11 +139,13 @@ We need to distinguish between strings from a trusted developer, from those that
 
 This will allow libraries / frameworks to protect against common mistakes; and, in the future, for PHP itself to check as well.
 
+This general approach is discussed by [Christoph Kern (Google) in 2015](https://www.usenix.org/conference/usenixsecurity15/symposium-program/presentation/kern) and in [2016](https://www.youtube.com/watch?v=ccfEu-Jj0as), and has been shown to work.
+
 ## Go Implementation
 
-The Go language can do this by checking for "compile time constants", which isn't as good as a run time solution (e.g. the `WHERE IN` issue), but it does work.
+The Go language can do this by checking for "compile time constants", which isn't as good as a run time solution (e.g. the `WHERE IN` issue), but it works.
 
-This general approach is discussed by [Christoph Kern (Google) in 2015](https://www.usenix.org/conference/usenixsecurity15/symposium-program/presentation/kern) and in [2016](https://www.youtube.com/watch?v=ccfEu-Jj0as). In particular, Google does this using [go-safe-html](https://blogtitle.github.io/go-safe-html/) and [go-safesql](https://github.com/google/go-safeweb/tree/master/safesql).
+Google does this using [go-safe-html](https://blogtitle.github.io/go-safe-html/) and [go-safesql](https://github.com/google/go-safeweb/tree/master/safesql).
 
 ## Perl Implementation
 
