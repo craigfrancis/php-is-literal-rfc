@@ -143,13 +143,13 @@ This will allow libraries / frameworks to protect against common mistakes; and, 
 
 The Go language can do this by checking for "compile time constants", which isn't as good as a run time solution (e.g. the `WHERE IN` issue), but it does work.
 
-This general approach is discussed by [Christoph Kern (Google) in 2015](https://www.usenix.org/conference/usenixsecurity15/symposium-program/presentation/kern) and in [2016](https://www.youtube.com/watch?v=ccfEu-Jj0as). In particular, Google does this using [go-safe-html](https://blogtitle.github.io/go-safe-html/) and [safesql](https://github.com/google/go-safeweb/tree/master/safesql).
+This general approach is discussed by [Christoph Kern (Google) in 2015](https://www.usenix.org/conference/usenixsecurity15/symposium-program/presentation/kern) and in [2016](https://www.youtube.com/watch?v=ccfEu-Jj0as). In particular, Google does this using [go-safe-html](https://blogtitle.github.io/go-safe-html/) and [go-safesql](https://github.com/google/go-safeweb/tree/master/safesql).
 
 ## Perl Implementation
 
 Perl has a [Taint Mode](https://perldoc.perl.org/perlsec#Taint-mode), via the -T flag, where all input is marked as "tainted", and cannot be used by some things (like commands that modify files), unless you use a regular expression to match and return known-good values.
 
-This approach isn't complete, and relies on programers and libraries to use regular expressions (easy to get wrong), and will often lead to the use of escaping (see the mistakes above, especially where context is important).
+This approach isn't complete, and relies on programers and libraries using regular expressions (easy to get wrong), and will often lead to the use of escaping (see the mistakes above, especially where context is important).
 
 ## JavaScript Implementation
 
