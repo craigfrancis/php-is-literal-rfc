@@ -74,11 +74,11 @@ Unlike the Taint extension, there must **not** be an equivalent `untaint()` func
 
 ## Previous Work
 
-There is the [Taint extension](https://github.com/laruence/taint) by Xinchen Hui, but in contract to this, there must **not** be an equivalent `untaint()` function, or support any kind of escaping (see the [justification page](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md)).
+There is the [Taint extension](https://github.com/laruence/taint) by Xinchen Hui, but in contrast to this, there must **not** be an equivalent `untaint()` function, or support any kind of escaping (see the [justification page](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md)).
 
-Google currently uses a [similar approach in Go](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md#go-implementation) where they use "compile time constants", [Perl has a Taint Mode](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md#perl-implementation) which uses regular expressions to un-taint data, and there are discussions about [adding it to JavaScript](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md#javascript-implementation) to support Trusted Types.
+Google currently uses a [similar approach in Go](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md#go-implementation) which uses "compile time constants", [Perl has a Taint Mode](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md#perl-implementation) (but uses regular expressions to un-taint data), and there are discussions about [adding it to JavaScript](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md#javascript-implementation) to support Trusted Types.
 
-As noted be [Tyson Andre](https://news-web.php.net/php.internals/109192), it might be possible to use static analysis, for example [psalm](https://psalm.dev/). But I can't find any which do these checks by default, they are likely to miss things that happen at runtime, and we can't expect all programmers to use static analysis (especially those who have just stated, who need this more than developers who know the concepts and just make the odd mistake).
+As noted be [Tyson Andre](https://news-web.php.net/php.internals/109192), it might be possible to use static analysis, for example [psalm](https://psalm.dev/). But I can't find any which do these checks by default, [can be incomplete](https://github.com/vimeo/psalm/commit/2122e4a1756dac68a83ec3f5abfbc60331630781), they are likely to miss things (especially at runtime), and we can't expect all programmers to use static analysis (especially those who have just stated, who need this more than developers who know the concepts and just make the odd mistake).
 
 And there is the [Automatic SQL Injection Protection](https://wiki.php.net/rfc/sql_injection_protection) RFC by Matt Tait, where this RFC uses a similar concept of the [SafeConst](https://wiki.php.net/rfc/sql_injection_protection#safeconst). When Matt's RFC was being discussed, it was noted:
 
@@ -128,7 +128,7 @@ Not sure
 
 As noted by [MarkR](https://chat.stackoverflow.com/transcript/message/51573226#51573226), the biggest benefit will come when it can be used by PDO and similar functions (`mysqli_query`, `preg_match`, `exec`, etc). But the basic idea can be used immediately by frameworks and general abstraction libraries, and they can give feedback for future work.
 
-**Phase 2** could introduce a way for certain function arguments to only accept safe literals, and/or specific value-objects the project trusts (this idea comes from [Trusted Types](https://web.dev/trusted-types/) in JavaScript).
+**Phase 2** could introduce a way for programmers to specify that certain function arguments only accept safe literals, and/or specific value-objects their project trusts (this idea comes from [Trusted Types](https://web.dev/trusted-types/) in JavaScript).
 
 For example, a project could require the second argument for `pg_query()` to only accept literals or their `query_builder` object (which provides a `__toString` method); and that any output (print, echo, readfile, etc) must use the `html_output` object that's returned by their trusted HTML Templating system (using `ob_start()` might be useful here).
 

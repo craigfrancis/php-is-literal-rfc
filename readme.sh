@@ -27,3 +27,5 @@ cat "readme.md" \
 #   | perl -pe 's/^(http[^ ]+?)(\\\\)?$/[\1](\1)/g' \
 #   | perl -pe 's/^\* (http[^ ]+?)(\\\\)?$/\* [\1](\1)/g' \
 #   > readme.md;
+
+pbcopy < readme.txt;
