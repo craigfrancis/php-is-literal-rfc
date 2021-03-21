@@ -76,9 +76,7 @@ Unlike the Taint extension, there must **not** be an equivalent `untaint()` func
 
 There is the [Taint extension](https://github.com/laruence/taint) by Xinchen Hui, but in contract to this, there must **not** be an equivalent `untaint()` function, or support any kind of escaping (see the [justification page](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md)).
 
-Google currently uses a [similar approach in Go](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md#go-implementation) where they use "compile time constants".
-
-And there are discussions about [adding it to JavaScript](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md#javascript-implementation) to support Trusted Types.
+Google currently uses a [similar approach in Go](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md#go-implementation) where they use "compile time constants", [Perl has a Taint Mode](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md#perl-implementation) which uses regular expressions to un-taint data, and there are discussions about [adding it to JavaScript](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md#javascript-implementation) to support Trusted Types.
 
 As noted be [Tyson Andre](https://news-web.php.net/php.internals/109192), it might be possible to use static analysis, for example [psalm](https://psalm.dev/). But I can't find any which do these checks by default, they are likely to miss things that happen at runtime, and we can't expect all programmers to use static analysis (especially those who have just stated, who need this more than developers who know the concepts and just make the odd mistake).
 
