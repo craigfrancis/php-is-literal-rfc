@@ -12,6 +12,17 @@ Unsafe values (often user supplied) **must** be kept separate (e.g. parameterise
 
 This is primarily for security reasons, but it can also cause data to be damaged (e.g. ASCII vs UTF-8 issues).
 
+Some general uses for this would include:
+
+- SQL, which must use parameterised queries to stop SQL Injection.
+- HTML, which must use a templating engine that's context aware to avoid XSS.
+- Output using a proper encoder (e.g. `fputcsv()` or `json_encode()`).
+- `exec()`, `shell_exec()`, `system()` to stop Command Line Injection.
+- `eval()` to stop, well everything.
+- `preg_match()` where $pattern can cause issues.
+- `mail()` where $additional_params can cause issues.
+- `$xpath->query()` where $expression can cause issues.
+
 ## Example
 
 It's often believed a Database Abstraction (e.g. an ORM) is safe, because you're not writing the SQL yourself.

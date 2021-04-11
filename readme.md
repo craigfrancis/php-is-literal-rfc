@@ -14,11 +14,11 @@ Add an `is_literal()` function, so developers/frameworks can check if a given va
 
 As in, at runtime, being able to check if a variable has been created by literals, defined within a PHP script, by a trusted developer.
 
-This simple check can be used to warn or completely block SQL Injection, Command Line Injection, and many cases of HTML Injection (aka XSS).
+This check can be used to warn or completely block (by default) many, if not all, injection based vulnerabilities.
 
 See the [justification for why this is important](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md).
 
-In short, abstractions like Doctrine could protect against [common mistakes](https://www.doctrine-project.org/projects/doctrine-orm/en/2.7/reference/security.html), like this [Query Builder](https://www.doctrine-project.org/projects/doctrine-orm/en/2.7/reference/query-builder.html#high-level-api-methods) example:
+In short, abstractions like Doctrine could identify [common mistakes](https://www.doctrine-project.org/projects/doctrine-orm/en/2.7/reference/security.html), like this [Query Builder](https://www.doctrine-project.org/projects/doctrine-orm/en/2.7/reference/query-builder.html#high-level-api-methods) SQL Injection vulnerability:
 
 ```php
 $users = $queryBuilder
@@ -29,7 +29,7 @@ $users = $queryBuilder
   ->getResult();
 ```
 
-Or this Twig [HTML Template](https://twig.symfony.com/doc/2.x/recipes.html#loading-a-template-from-a-string):
+Or Twig could project against HTML Injection vulnerabilities (aka XSS), like this flawed [HTML Template](https://twig.symfony.com/doc/2.x/recipes.html#loading-a-template-from-a-string):
 
 ```php
 echo $twig->createTemplate('<p>Hi ' . $_GET['name'] . '</p>')->render();
@@ -78,7 +78,7 @@ There is the [Taint extension](https://github.com/laruence/taint) by Xinchen Hui
 
 Google currently uses a [similar approach in Go](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md#go-implementation) which uses "compile time constants", [Perl has a Taint Mode](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md#perl-implementation) (but uses regular expressions to un-taint data), and there are discussions about [adding it to JavaScript](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md#javascript-implementation) to support Trusted Types.
 
-As noted be [Tyson Andre](https://news-web.php.net/php.internals/109192), it might be possible to use static analysis, for example [psalm](https://psalm.dev/). But I can't find any which do these checks by default, [can be incomplete](https://github.com/vimeo/psalm/commit/2122e4a1756dac68a83ec3f5abfbc60331630781), they are likely to miss things (especially at runtime), and we can't expect all programmers to use static analysis (especially those who have just stated, who need this more than developers who know the concepts and just make the odd mistake).
+As noted be [Tyson Andre](https://news-web.php.net/php.internals/109192), it might be possible to use static analysis, for example [psalm](https://psalm.dev/). But I can't find any which do these checks by default, [can be incomplete](https://github.com/vimeo/psalm/commit/2122e4a1756dac68a83ec3f5abfbc60331630781), they are likely to miss things (especially at runtime), and we can't expect all programmers to use static analysis (especially those who are new to programming, who need this more than developers who know the concepts and just make the odd mistake).
 
 And there is the [Automatic SQL Injection Protection](https://wiki.php.net/rfc/sql_injection_protection) RFC by Matt Tait, where this RFC uses a similar concept of the [SafeConst](https://wiki.php.net/rfc/sql_injection_protection#safeconst). When Matt's RFC was being discussed, it was noted:
 
@@ -87,7 +87,7 @@ And there is the [Automatic SQL Injection Protection](https://wiki.php.net/rfc/s
 * It would have effected every SQL function, such as `mysqli_query()`, `$pdo->query()`, `odbc_exec()`, etc (concerns raised by [Lester Caine](https://news-web.php.net/php.internals/87436) and [Anthony Ferrara](https://news-web.php.net/php.internals/87650));
 * Each of those functions would need a bypass for cases where unsafe SQL was intentionally being used (e.g. phpMyAdmin taking SQL from POST data) because some applications intentionally "pass raw, user submitted, SQL" (Ronald Chmara [1](https://news-web.php.net/php.internals/87406)/[2](https://news-web.php.net/php.internals/87446)).
 
-I also agree that "SQL injection is almost a solved problem [by using] prepared statements" ([Scott Arciszewski](https://news-web.php.net/php.internals/87400)), but we still need the `is_literal()` check to identify mistakes.
+I also agree that "SQL injection is almost a solved problem [by using] prepared statements" ([Scott Arciszewski](https://news-web.php.net/php.internals/87400)), but we still `is_literal()` to identify mistakes.
 
 ## Backward Incompatible Changes
 
@@ -130,7 +130,7 @@ As noted by [MarkR](https://chat.stackoverflow.com/transcript/message/51573226#5
 
 **Phase 2** could introduce a way for programmers to specify that certain function arguments only accept safe literals, and/or specific value-objects their project trusts (this idea comes from [Trusted Types](https://web.dev/trusted-types/) in JavaScript).
 
-For example, a project could require the second argument for `pg_query()` to only accept literals or their `query_builder` object (which provides a `__toString` method); and that any output (print, echo, readfile, etc) must use the `html_output` object that's returned by their trusted HTML Templating system (using `ob_start()` might be useful here).
+For example, a project could require the second argument for `pg_query()` only accept literals or their `query_builder` object (which provides a `__toString` method); and that any output (print, echo, readfile, etc) must use the `html_output` object that's returned by their trusted HTML Templating system (using `ob_start()` might be useful here).
 
 **Phase 3** could set a default of 'only literals' for all of the relevant PHP function arguments, so developers are given a warning, and later prevented (via an exception), when they provide an unsafe value to those functions (they could still specify that unsafe values are allowed, e.g. phpMyAdmin).
 
