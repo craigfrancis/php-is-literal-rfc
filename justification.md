@@ -196,10 +196,6 @@ is_literal($_GET['id']); // false
 is_literal(rand(0, 10)); // false
 
 is_literal(sprintf('LIMIT %d', 3)); // false
-
-$c = count($ids);
-$a = 'WHERE id IN (' . implode(',', array_fill(0, $c, '?')) . ')';
-is_literal($a); // true, the one exception that involves functions.
 ```
 
 This allows us to ensure commands are a "programmer supplied constant/static/validated string", with all unsafe variables being provided separately (as noted by [Yasuo Ohgaki](https://news-web.php.net/php.internals/87725)).
@@ -296,12 +292,22 @@ $sql = ' ORDER BY ' . $order_fields[$order_id];
 
 Most SQL strings can be a simple concatenations of literal values, but `WHERE x IN (?,?,?)` needs to use a variable number of literal placeholders.
 
-There needs to be a special case just for `array_fill()`+`implode()`, so the `is_literal` state can be preserved, allowing us to create the safe literal string '?,?,?':
+This could be done with a helper function:
 
 ```php
-$in_sql = implode(',', array_fill(0, count($ids), '?'));
+function where_in_sql($count) { // Should check for 0
+  $sql = '?';
+  for ($k = 1; $k < $count; $k++) {
+    $sql .= ',?';
+  }
+  return $sql;
+}
+```
 
-$sql = 'SELECT * FROM table WHERE id IN (' . $in_sql . ')';
+Where the programmer can use this with:
+
+```php
+$sql = 'WHERE id IN (' . where_in_sql(count($ids)) . ')';
 ```
 
 ### Solution: CLI Injection
