@@ -1,5 +1,9 @@
 <?php
 
+//--------------------------------------------------
+//
+// https://github.com/craigfrancis/php-is-literal-rfc/blob/main/tests/run.md
+//
 // TEST=1
 //   A basic test on the string concat performance.
 //   It's intended to focus on the worse possible
@@ -15,6 +19,8 @@
 //   a single value from the $_GET array, there does not
 //   appear to be any difference (because it's not really
 //   doing anything.
+//
+//--------------------------------------------------
 
 const N = 5000000;
 
