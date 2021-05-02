@@ -1,0 +1,44 @@
+Unable to find image 'public.ecr.aws/x6h2r6q4/php-benchmark-fpm:master2-latest' locally
+master2-latest: Pulling from x6h2r6q4/php-benchmark-fpm
+bd8f6a7501cc: Already exists
+71ca196f6723: Already exists
+93cf86eae17f: Already exists
+91cc8a1f688e: Already exists
+189311234597: Pulling fs layer
+26e6bca4d427: Pulling fs layer
+9c9b3be16ae7: Pulling fs layer
+3367371aeda8: Pulling fs layer
+3367371aeda8: Waiting
+26e6bca4d427: Download complete
+189311234597: Verifying Checksum
+189311234597: Download complete
+9c9b3be16ae7: Verifying Checksum
+9c9b3be16ae7: Download complete
+3367371aeda8: Verifying Checksum
+3367371aeda8: Download complete
+189311234597: Pull complete
+26e6bca4d427: Pull complete
+9c9b3be16ae7: Pull complete
+3367371aeda8: Pull complete
+Digest: sha256:fa1710a4cb9d1adf5970f7fa598c5e83a566add9860395866055651ba6bd6d6a
+Status: Downloaded newer image for public.ecr.aws/x6h2r6q4/php-benchmark-fpm:master2-latest
+
+Elapsed time: 18.161789 sec
+
+Elapsed time: 18.361674 sec
+
+Elapsed time: 18.100707 sec
+
+Elapsed time: 18.161189 sec
+
+Elapsed time: 18.163661 sec
+
+Elapsed time: 18.094994 sec
+
+Elapsed time: 18.192350 sec
+
+Elapsed time: 18.149346 sec
+
+Elapsed time: 18.225401 sec
+
+Elapsed time: 18.145697 sec

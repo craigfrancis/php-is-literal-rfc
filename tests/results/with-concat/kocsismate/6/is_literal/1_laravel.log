@@ -1,0 +1,59 @@
+Unable to find image 'public.ecr.aws/x6h2r6q4/php-benchmark-fpm:is_literal-latest' locally
+is_literal-latest: Pulling from x6h2r6q4/php-benchmark-fpm
+bd8f6a7501cc: Pulling fs layer
+71ca196f6723: Pulling fs layer
+93cf86eae17f: Pulling fs layer
+91cc8a1f688e: Pulling fs layer
+f36164c7fef6: Pulling fs layer
+b3a8d7b899b3: Pulling fs layer
+e86168791ad7: Pulling fs layer
+b8f57901041c: Pulling fs layer
+91cc8a1f688e: Waiting
+b8f57901041c: Waiting
+b3a8d7b899b3: Waiting
+f36164c7fef6: Waiting
+e86168791ad7: Waiting
+71ca196f6723: Verifying Checksum
+71ca196f6723: Download complete
+91cc8a1f688e: Verifying Checksum
+91cc8a1f688e: Download complete
+bd8f6a7501cc: Verifying Checksum
+bd8f6a7501cc: Download complete
+f36164c7fef6: Verifying Checksum
+f36164c7fef6: Download complete
+b3a8d7b899b3: Verifying Checksum
+b3a8d7b899b3: Download complete
+93cf86eae17f: Download complete
+b8f57901041c: Download complete
+e86168791ad7: Verifying Checksum
+e86168791ad7: Download complete
+bd8f6a7501cc: Pull complete
+71ca196f6723: Pull complete
+93cf86eae17f: Pull complete
+91cc8a1f688e: Pull complete
+f36164c7fef6: Pull complete
+b3a8d7b899b3: Pull complete
+e86168791ad7: Pull complete
+b8f57901041c: Pull complete
+Digest: sha256:ba29a0004f8f23b3b592612be927f07656103e3424fc504be615bc64d802d347
+Status: Downloaded newer image for public.ecr.aws/x6h2r6q4/php-benchmark-fpm:is_literal-latest
+
+Elapsed time: 18.273823 sec
+
+Elapsed time: 18.290847 sec
+
+Elapsed time: 18.170621 sec
+
+Elapsed time: 18.198201 sec
+
+Elapsed time: 18.269821 sec
+
+Elapsed time: 18.234267 sec
+
+Elapsed time: 18.153723 sec
+
+Elapsed time: 18.195214 sec
+
+Elapsed time: 18.172044 sec
+
+Elapsed time: 18.168891 sec
