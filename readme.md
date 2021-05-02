@@ -126,8 +126,8 @@ But the biggest problem is that Static Analysis is simply not used by most devel
 This RFC proposes adding three functions:
 
 * `is_literal(string $string): bool` to check if a variable represents a value written into the source code or not.
-* `literal_combine(string $piece, string $pieces): string` to allow concatenating strings.
-* `literal_implode(string $glue, array $pieces): string` to allow building
+* `literal_combine(string $piece, string $pieces): string` to allow concatenating literal strings.
+* `literal_implode(string $glue, array $pieces): string` to implode an array of literals, with a literal.
 
 A literal is defined as a value (string) which has been written by the programmer. The value may be passed between functions, as long as it is not modified in any way.
 
@@ -150,7 +150,7 @@ is_literal(sprintf('LIMIT %d', 3)); // false, should use parameters
 
 There is no way to manually mark a string as a literal (i.e. no equivalent to `untaint()`); as soon as the value has been manipulated in any way, it is no longer marked as a literal.
 
-*Technical detail: Strings that are concatenated in place at compile time are treated as literal.*
+*Technical detail: Strings that are concatenated in place at compile time are treated as a literal.*
 
 ## Previous Work
 
@@ -239,7 +239,7 @@ Literal string is the standard name for strings in source code. See https://www.
 
 > A string literal is the notation for representing a string value within the text of a computer program. In PHP, strings can be created with single quotes, double quotes or using the heredoc or the nowdoc syntax. ... The heredoc preserves the line breaks and other whitespace (including indentation) in the text.
 
-Alternatives suggestions have included `is_from_literal()` from [Jakob Givoni](https://news-web.php.net/php.internals/109197), `is_safe_string()` which is just asking for trouble. Other terms have included "compile time constants" and "code string".
+Alternatives suggestions have included `is_from_literal()` from [Jakob Givoni](https://news-web.php.net/php.internals/109197). I think `is_safe_string()` might be asking for trouble. Other terms have included "compile time constants" and "code string".
 
 ### Supporting Int/Float/Boolean values.
 
@@ -251,7 +251,7 @@ It's also a very low value feature, where there might not be space for a flag to
 
 ### Supporting Concatenation
 
-Unfortunately early testing suggests that there will be too much of a performance impact.
+Unfortunately early testing suggests there will be too much of a performance impact, and is why `literal_combine()` or `literal_implode()` exists.
 
 It isn't needed for most libraries, like an ORM or Query Builder, where their methods nearly always take a small literal string.
 
@@ -259,11 +259,11 @@ It was considered because it would have made it easier for existing projects cur
 
 Joe Watkins has created a version that does support string concatenation, which we might re-consider at a later date (Joe's implementation also sets the literal flag, and was used as the basis for this implementation).
 
-Máté Kocsis did the [primary testing on the string concat version](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/tests/results/with-concat/kocsismate.pdf), and found a 0.124% performance hit for the Laravel Demo app, 0.161% for Symfony, and a more severe -3.719% when running this [concat test](https://github.com/kocsismate/php-version-benchmarks/blob/main/app/zend/concat.php).
+Máté Kocsis did the [primary testing on the string concat version](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/tests/results/with-concat/kocsismate.pdf), and found a 0.124% performance hit for the Laravel Demo app, 0.161% for Symfony, and a more severe -3.719% when running this [concat test](https://github.com/kocsismate/php-version-benchmarks/blob/main/app/zend/concat.php#L25).
 
 In my own [simplistic testing](https://github.com/craigfrancis/php-is-literal-rfc/tree/main/tests), the [results](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/tests/results/with-concat/local.pdf) found a 0.42% performance hit for the Laravel Demo app, 0.40% for Symfony, and 1.81% when running my [concat test](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/tests/001.phpt) via `./cli/php`.
 
-Also, Dan Ackroyd notes the use of `literal_combine()` or `literal_implode()` makes it easier to identify exactly where mistakes are made, rather than it being picked up at the end of a potentially long script, after multiple string concatenations, e.g.
+Dan Ackroyd also notes that the use of `literal_combine()` or `literal_implode()` will make it easier to identify exactly where mistakes are made, rather than it being picked up at the end of a potentially long script, after multiple string concatenations, e.g.
 
 ```php
 $sortOrder = 'ASC';
