@@ -277,7 +277,7 @@ $sql .= ' ORDER BY name ' . $sortOrder;
 $db->query($sql);
 </code>
 
-If a developer changed the literal //'ASC'// to //$_GET['order']//, the error raised by //$db->query()// would not be clear where the mistake was made. Whereas using //literal_combine()// highlights the issue exactly where it happened:
+If a developer changed the literal //'ASC'// to //$_GET['order']//, the error raised by //$db->query()// would not be clear where the mistake was made. Whereas using //literal_combine()// highlights exactly where the issue happened:
 
 <code php>
 $sql = literal_combine($sql, ' ORDER BY name ', $sortOrder);
@@ -335,7 +335,7 @@ None known
 
 As noted by MarkR, the biggest benefit will come when it can be used by PDO and similar functions (//mysqli_query//, //preg_match//, //exec//, etc). But the basic idea can be used immediately by frameworks and general abstraction libraries, and they can give feedback for future work.
 
-**Phase 2** could introduce a way for programmers to specify certain function arguments only accept literals, and/or specific value-objects their project trusts (this idea comes from [[https://web.dev/trusted-types/|Trusted Types]] in JavaScript).
+**Phase 2** could introduce a way for programmers to specify certain PHP function/method arguments can only accept literals, and/or specific value-objects their project trusts (this idea comes from [[https://web.dev/trusted-types/|Trusted Types]] in JavaScript).
 
 For example, a project could require the second argument for //pg_query()// only accept literals or their //query_builder// object (which provides a //__toString// method); and that any output (print, echo, readfile, etc) must use the //html_output// object that's returned by their trusted HTML Templating system (using //ob_start()// might be useful here).
 
@@ -355,7 +355,7 @@ N/A
 
 Dan Ackroyd has [[https://github.com/php/php-src/compare/master...Danack:is_literal_attempt_two|started an implementation]], which uses functions like [[https://github.com/php/php-src/compare/master...Danack:is_literal_attempt_two#diff-2b0486443df74cd919c949f33f895eacf97c34b8490e7554e032e770ab11e4d8R2761|literal_combine()]] to avoid performance concerns.
 
-Joe Watkins has [[https://github.com/php/php-src/compare/master...krakjoe:literals|created an implementation]] which includes string concat. The performance impact needs to be considered, but it would provide the easiest solution for projects already using string concat for their parameterised SQL.
+Joe Watkins has [[https://github.com/php/php-src/compare/master...krakjoe:literals|created an implementation]] which includes string concat. As noted above, the performance impact is probably too much for it to be accepted.
 
 ===== References =====
 
