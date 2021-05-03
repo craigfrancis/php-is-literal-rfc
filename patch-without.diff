@@ -147,18 +147,9 @@ index 6291e4397b..6638908312 100644
  
  #endif
 diff --git a/Zend/zend_operators.c b/Zend/zend_operators.c
-index 8b0fed8e90..c5458316ba 100644
+index 8b0fed8e90..b0025eaf43 100644
 --- a/Zend/zend_operators.c
 +++ b/Zend/zend_operators.c
-@@ -1811,7 +1811,7 @@ ZEND_API zend_result ZEND_FASTCALL concat_function(zval *result, zval *op1, zval
- {
-     zval *orig_op1 = op1;
- 	zval op1_copy, op2_copy;
--
-+    
- 	ZVAL_UNDEF(&op1_copy);
- 	ZVAL_UNDEF(&op2_copy);
- 
 @@ -1891,6 +1891,11 @@ ZEND_API zend_result ZEND_FASTCALL concat_function(zval *result, zval *op1, zval
  		if (result == op1 && Z_REFCOUNTED_P(result)) {
  			/* special case, perform operations on result */
@@ -166,7 +157,7 @@ index 8b0fed8e90..c5458316ba 100644
 +			if (UNEXPECTED(
 +			    (Z_TYPE_P(op1) == IS_STRING && Z_TYPE_P(op2) == IS_STRING) && 
 +			    (ZSTR_IS_LITERAL(Z_STR_P(op1))))) {
-+			    ZSTR_UNSET_LITERAL(&Z_STR_P(result));
++			    ZSTR_UNSET_LITERAL(&result_str);
 +			}
  		} else {
  			result_str = zend_string_alloc(result_len, 0);
