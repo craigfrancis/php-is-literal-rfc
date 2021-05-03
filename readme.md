@@ -251,7 +251,7 @@ It's also a very low value feature, where there might not be space for a flag to
 
 ### Supporting Concatenation
 
-Unfortunately early testing suggests there will be too much of a performance impact, and is why `literal_combine()` or `literal_implode()` exists.
+Early testing suggests there will be a performance impact, and is why `literal_combine()` or `literal_implode()` exists.
 
 It isn't needed for most libraries, like an ORM or Query Builder, where their methods nearly always take a small literal string.
 
@@ -261,7 +261,7 @@ Joe Watkins has created a version that does support string concatenation, which 
 
 Máté Kocsis did the [primary testing on the string concat version](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/tests/results/with-concat/kocsismate.pdf), and found a 0.124% performance hit for the Laravel Demo app, 0.161% for Symfony, and a more severe -3.719% when running this [concat test](https://github.com/kocsismate/php-version-benchmarks/blob/main/app/zend/concat.php#L25).
 
-In my own [simplistic testing](https://github.com/craigfrancis/php-is-literal-rfc/tree/main/tests), the [results](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/tests/results/with-concat/local.pdf) found a 0.42% performance hit for the Laravel Demo app, 0.40% for Symfony, and 1.81% when running my [concat test](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/tests/001.phpt) via `./cli/php`.
+In my own [simplistic testing](https://github.com/craigfrancis/php-is-literal-rfc/tree/main/tests), the [results](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/tests/results/with-concat/local.pdf) found a 0.30% performance hit for the Laravel Demo app (0.18% without concat), 0.06% for Symfony (0.06% without concat), and 4.36% when running my [concat test](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/tests/001.phpt) via `./cli/php` (2.23% without concat).
 
 Dan Ackroyd also notes that the use of `literal_combine()` or `literal_implode()` will make it easier to identify exactly where mistakes are made, rather than it being picked up at the end of a potentially long script, after multiple string concatenations, e.g.
 
