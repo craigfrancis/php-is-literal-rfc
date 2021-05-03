@@ -1,0 +1,1252 @@
+diff --git a/Zend/zend_compile.c b/Zend/zend_compile.c
+index 884f653ed7..1fab917e6e 100644
+--- a/Zend/zend_compile.c
++++ b/Zend/zend_compile.c
+@@ -6389,6 +6389,8 @@ static void zend_compile_attributes(HashTable **attributes, zend_ast *ast, uint3
+ 			zend_string *name = zend_resolve_class_name_ast(el->child[0]);
+ 			zend_ast_list *args = el->child[1] ? zend_ast_get_list(el->child[1]) : NULL;
+ 
++			ZSTR_SET_LITERAL(&name);
++
+ 			uint32_t flags = (CG(active_op_array)->fn_flags & ZEND_ACC_STRICT_TYPES)
+ 				? ZEND_ATTRIBUTE_STRICT_TYPES : 0;
+ 			attr = zend_add_attribute(
+@@ -6414,6 +6416,8 @@ static void zend_compile_attributes(HashTable **attributes, zend_ast *ast, uint3
+ 						arg_ast_ptr = &arg_ast->child[1];
+ 						uses_named_args = 1;
+ 
++						ZSTR_SET_LITERAL(&attr->args[j].name);
++						
+ 						for (uint32_t k = 0; k < j; k++) {
+ 							if (attr->args[k].name &&
+ 									zend_string_equals(attr->args[k].name, attr->args[j].name)) {
+@@ -6427,6 +6431,10 @@ static void zend_compile_attributes(HashTable **attributes, zend_ast *ast, uint3
+ 					}
+ 
+ 					zend_const_expr_to_zval(&attr->args[j].value, arg_ast_ptr);
++					
++					if (Z_TYPE(attr->args[j].value) == IS_STRING) {
++						ZSTR_SET_LITERAL(&Z_STR(attr->args[j].value));
++					}
+ 				}
+ 			}
+ 		}
+@@ -6945,7 +6953,8 @@ zend_string *zend_begin_method_decl(zend_op_array *op_array, zend_string *name,
+ 	}
+ 
+ 	op_array->scope = ce;
+-	op_array->function_name = zend_string_copy(name);
++	op_array->function_name = zend_string_copy(name);	
++	ZSTR_SET_LITERAL(&op_array->function_name);
+ 
+ 	lcname = zend_string_tolower(name);
+ 	lcname = zend_new_interned_string(lcname);
+@@ -6980,6 +6989,8 @@ static void zend_begin_func_decl(znode *result, zend_op_array *op_array, zend_as
+ 
+ 	unqualified_name = decl->name;
+ 	op_array->function_name = name = zend_prefix_with_ns(unqualified_name);
++	
++	ZSTR_SET_LITERAL(&op_array->function_name);
+ 	lcname = zend_string_tolower(name);
+ 
+ 	if (FC(imports_function)) {
+@@ -7178,6 +7189,8 @@ void zend_compile_prop_decl(zend_ast *ast, zend_ast *type_ast, uint32_t flags, z
+ 		zval value_zv;
+ 		zend_type type = ZEND_TYPE_INIT_NONE(0);
+ 
++		ZSTR_SET_LITERAL(&name);
++
+ 		if (type_ast) {
+ 			type = zend_compile_typename(type_ast, /* force_allow_null */ 0);
+ 
+@@ -7226,12 +7239,19 @@ void zend_compile_prop_decl(zend_ast *ast, zend_ast *type_ast, uint32_t flags, z
+ 						ZSTR_VAL(ce->name), ZSTR_VAL(name), ZSTR_VAL(str));
+ 				}
+ 			}
++			if (Z_TYPE(value_zv) == IS_STRING) {
++				ZSTR_SET_LITERAL(&Z_STR(value_zv));
++			}
+ 		} else if (!ZEND_TYPE_IS_SET(type)) {
+ 			ZVAL_NULL(&value_zv);
+ 		} else {
+ 			ZVAL_UNDEF(&value_zv);
+ 		}
+ 
++		if (Z_TYPE(value_zv) == IS_STRING) {
++			ZSTR_SET_LITERAL(&Z_STR(value_zv));
++		}
++
+ 		info = zend_declare_typed_property(ce, name, &value_zv, flags, doc_comment, type);
+ 
+ 		if (attr_ast) {
+@@ -7497,6 +7517,8 @@ void zend_compile_class_decl(znode *result, zend_ast *ast, bool toplevel) /* {{{
+ 		zend_assert_valid_class_name(unqualified_name);
+ 		name = zend_prefix_with_ns(unqualified_name);
+ 		name = zend_new_interned_string(name);
++		ZSTR_SET_LITERAL(&name);
++
+ 		lcname = zend_string_tolower(name);
+ 
+ 		if (FC(imports)) {
+@@ -8310,11 +8332,20 @@ static bool zend_try_ct_eval_array(zval *result, zend_ast *ast) /* {{{ */
+ 			}
+ 		}
+ 
++        if (Z_TYPE_P(value) == IS_STRING) {
++            ZSTR_SET_LITERAL(&Z_STR_P(value));
++        }
++
+ 		Z_TRY_ADDREF_P(value);
+ 
+ 		key_ast = elem_ast->child[1];
+ 		if (key_ast) {
+ 			zval *key = zend_ast_get_zval(key_ast);
++
++			if (Z_TYPE_P(key) == IS_STRING) {
++                ZSTR_SET_LITERAL(&Z_STR_P(key));
++            }
++
+ 			switch (Z_TYPE_P(key)) {
+ 				case IS_LONG:
+ 					zend_hash_index_update(Z_ARRVAL_P(result), Z_LVAL_P(key), value);
+@@ -9965,6 +9996,7 @@ zend_op *zend_compile_var(znode *result, zend_ast *ast, uint32_t type, bool by_r
+ 	uint32_t checkpoint = zend_short_circuiting_checkpoint();
+ 	zend_op *opcode = zend_compile_var_inner(result, ast, type, by_ref);
+ 	zend_short_circuiting_commit(checkpoint, result, ast);
++
+ 	return opcode;
+ }
+ 
+diff --git a/Zend/zend_compile.h b/Zend/zend_compile.h
+index 6291e4397b..6638908312 100644
+--- a/Zend/zend_compile.h
++++ b/Zend/zend_compile.h
+@@ -698,6 +698,9 @@ struct _zend_execute_data {
+ /* convert constant from compile-time to run-time */
+ # define ZEND_PASS_TWO_UPDATE_CONSTANT(op_array, opline, node) do { \
+ 		(node).zv = CT_CONSTANT_EX(op_array, (node).constant); \
++		if (Z_TYPE_P((node).zv) == IS_STRING) { \
++		    ZSTR_SET_LITERAL(&Z_STR_P((node).zv)); \
++		} \
+ 	} while (0)
+ 
+ #else
+@@ -712,9 +715,14 @@ struct _zend_execute_data {
+ 
+ /* convert constant from compile-time to run-time */
+ # define ZEND_PASS_TWO_UPDATE_CONSTANT(op_array, opline, node) do { \
++        zval *zv; \
+ 		(node).constant = \
+ 			(((char*)CT_CONSTANT_EX(op_array, (node).constant)) - \
+ 			((char*)opline)); \
++        zv = ((zval*)(((char*)(opline)) + (int32_t)(node).constant)); \
++        if (Z_TYPE_P(zv) == IS_STRING) { \
++            ZSTR_SET_LITERAL(&Z_STR_P(zv)); \
++        } \
+ 	} while (0)
+ 
+ #endif
+diff --git a/Zend/zend_operators.c b/Zend/zend_operators.c
+index 8b0fed8e90..c5458316ba 100644
+--- a/Zend/zend_operators.c
++++ b/Zend/zend_operators.c
+@@ -1811,7 +1811,7 @@ ZEND_API zend_result ZEND_FASTCALL concat_function(zval *result, zval *op1, zval
+ {
+     zval *orig_op1 = op1;
+ 	zval op1_copy, op2_copy;
+-
++    
+ 	ZVAL_UNDEF(&op1_copy);
+ 	ZVAL_UNDEF(&op2_copy);
+ 
+@@ -1891,6 +1891,11 @@ ZEND_API zend_result ZEND_FASTCALL concat_function(zval *result, zval *op1, zval
+ 		if (result == op1 && Z_REFCOUNTED_P(result)) {
+ 			/* special case, perform operations on result */
+ 			result_str = zend_string_extend(Z_STR_P(result), result_len, 0);
++			if (UNEXPECTED(
++			    (Z_TYPE_P(op1) == IS_STRING && Z_TYPE_P(op2) == IS_STRING) && 
++			    (ZSTR_IS_LITERAL(Z_STR_P(op1))))) {
++			    ZSTR_UNSET_LITERAL(&Z_STR_P(result));
++			}
+ 		} else {
+ 			result_str = zend_string_alloc(result_len, 0);
+ 			memcpy(ZSTR_VAL(result_str), Z_STRVAL_P(op1), op1_len);
+diff --git a/Zend/zend_string.c b/Zend/zend_string.c
+index ab074515aa..b42f6d4a7b 100644
+--- a/Zend/zend_string.c
++++ b/Zend/zend_string.c
+@@ -205,7 +205,7 @@ static zend_string* ZEND_FASTCALL zend_new_interned_string_permanent(zend_string
+ 		ZSTR_H(str) = h;
+ 	}
+ 
+-	return zend_add_interned_string(str, &interned_strings_permanent, IS_STR_PERMANENT);
++	return zend_add_interned_string(str, &interned_strings_permanent, IS_STR_PERMANENT|IS_STR_LITERAL);
+ }
+ 
+ static zend_string* ZEND_FASTCALL zend_new_interned_string_request(zend_string *str)
+@@ -246,7 +246,7 @@ static zend_string* ZEND_FASTCALL zend_new_interned_string_request(zend_string *
+ 		ZSTR_H(str) = h;
+ 	}
+ 
+-	ret = zend_add_interned_string(str, &CG(interned_strings), 0);
++	ret = zend_add_interned_string(str, &CG(interned_strings), IS_STR_LITERAL);
+ 
+ 	return ret;
+ }
+diff --git a/Zend/zend_string.h b/Zend/zend_string.h
+index b0205bd32d..39f5e12230 100644
+--- a/Zend/zend_string.h
++++ b/Zend/zend_string.h
+@@ -330,6 +330,50 @@ static zend_always_inline void zend_string_release_ex(zend_string *s, bool persi
+ 	}
+ }
+ 
++static zend_always_inline zend_string* zend_string_set_literal(zend_string *s) {
++    if (UNEXPECTED(GC_TYPE_INFO(s) & IS_STR_LITERAL)) {
++        return s;
++    }
++
++    if (EXPECTED(GC_REFCOUNT(s) == 1)) {
++        GC_TYPE_INFO(s) |= IS_STR_LITERAL;        
++        return s;
++    }
++
++    zend_string *literal = 
++        zend_string_dup(s, GC_FLAGS(s) & IS_STR_PERSISTENT);
++
++    zend_string_release(s);
++
++    GC_TYPE_INFO(literal) |= IS_STR_LITERAL;
++
++    return literal;
++}
++
++static zend_always_inline zend_string* zend_string_unset_literal(zend_string *s) {
++    if (UNEXPECTED(!(GC_TYPE_INFO(s) & IS_STR_LITERAL))) {
++        return s;
++    }
++
++    if (EXPECTED(GC_REFCOUNT(s) == 1)) {
++        GC_TYPE_INFO(s) &= ~IS_STR_LITERAL;        
++        return s;
++    }
++
++    zend_string *literal = 
++        zend_string_dup(s, GC_FLAGS(s) & IS_STR_PERSISTENT);
++
++    zend_string_release(s);
++
++    GC_TYPE_INFO(literal) &= ~IS_STR_LITERAL;
++
++    return literal;
++}
++
++#define ZSTR_IS_LITERAL(s)     (GC_TYPE_INFO(s) & IS_STR_LITERAL)
++#define ZSTR_SET_LITERAL(s)    *(s) = zend_string_set_literal(*(s))
++#define ZSTR_UNSET_LITERAL(s)  *(s) = zend_string_unset_literal(*(s))
++
+ #if defined(__GNUC__) && (defined(__i386__) || (defined(__x86_64__) && !defined(__ILP32__)))
+ BEGIN_EXTERN_C()
+ ZEND_API bool ZEND_FASTCALL zend_string_equal_val(zend_string *s1, zend_string *s2);
+diff --git a/Zend/zend_types.h b/Zend/zend_types.h
+index 863dd6adcd..272c9c7503 100644
+--- a/Zend/zend_types.h
++++ b/Zend/zend_types.h
+@@ -698,6 +698,7 @@ static zend_always_inline uint32_t zval_gc_info(uint32_t gc_type_info) {
+ #define IS_STR_PERSISTENT			GC_PERSISTENT /* allocated using malloc */
+ #define IS_STR_PERMANENT        	(1<<8)        /* relives request boundary */
+ #define IS_STR_VALID_UTF8           (1<<9)        /* valid UTF-8 according to PCRE */
++#define IS_STR_LITERAL              (1<<10)
+ 
+ /* array flags */
+ #define IS_ARRAY_IMMUTABLE			GC_IMMUTABLE
+diff --git a/Zend/zend_vm_def.h b/Zend/zend_vm_def.h
+index 51130b6b5a..e2d1245078 100644
+--- a/Zend/zend_vm_def.h
++++ b/Zend/zend_vm_def.h
+@@ -394,6 +394,9 @@ ZEND_VM_HANDLER(8, ZEND_CONCAT, CONST|TMPVAR|CV, CONST|TMPVAR|CV, SPEC(NO_CONST_
+ 			if (OP1_TYPE & (IS_TMP_VAR|IS_VAR)) {
+ 				zend_string_release_ex(op1_str, 0);
+ 			}
++			if (ZSTR_IS_LITERAL(op2_str)) {
++			    ZSTR_UNSET_LITERAL(&op2_str);
++			}
+ 		} else if (OP2_TYPE != IS_CONST && UNEXPECTED(ZSTR_LEN(op2_str) == 0)) {
+ 			if (OP1_TYPE == IS_CONST || OP1_TYPE == IS_CV) {
+ 				ZVAL_STR_COPY(EX_VAR(opline->result.var), op1_str);
+@@ -403,11 +406,20 @@ ZEND_VM_HANDLER(8, ZEND_CONCAT, CONST|TMPVAR|CV, CONST|TMPVAR|CV, SPEC(NO_CONST_
+ 			if (OP2_TYPE & (IS_TMP_VAR|IS_VAR)) {
+ 				zend_string_release_ex(op2_str, 0);
+ 			}
++
++// How can this one trigger?
++			// if (ZSTR_IS_LITERAL(op1_str)) {
++			//     ZSTR_UNSET_LITERAL(&op1_str);
++			// }
++
+ 		} else if (OP1_TYPE != IS_CONST && OP1_TYPE != IS_CV &&
+ 		    !ZSTR_IS_INTERNED(op1_str) && GC_REFCOUNT(op1_str) == 1) {
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str)) {
++			    ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (OP2_TYPE & (IS_TMP_VAR|IS_VAR)) {
+@@ -3132,6 +3144,9 @@ ZEND_VM_COLD_CONSTCONST_HANDLER(53, ZEND_FAST_CONCAT, CONST|TMPVAR|CV, CONST|TMP
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str)) {
++			    ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (OP2_TYPE & (IS_TMP_VAR|IS_VAR)) {
+@@ -3287,8 +3302,8 @@ ZEND_VM_HANDLER(55, ZEND_ROPE_ADD, TMP, CONST|TMPVAR|CV, NUM)
+ ZEND_VM_HANDLER(56, ZEND_ROPE_END, TMP, CONST|TMPVAR|CV, NUM)
+ {
+ 	USE_OPLINE
+-	zend_string **rope;
+-	zval *var, *ret;
++	zend_string **rope, *result;
++	zval *var;
+ 	uint32_t i;
+ 	size_t len = 0;
+ 	char *target;
+@@ -3327,16 +3342,16 @@ ZEND_VM_HANDLER(56, ZEND_ROPE_END, TMP, CONST|TMPVAR|CV, NUM)
+ 	for (i = 0; i <= opline->extended_value; i++) {
+ 		len += ZSTR_LEN(rope[i]);
+ 	}
+-	ret = EX_VAR(opline->result.var);
+-	ZVAL_STR(ret, zend_string_alloc(len, 0));
+-	target = Z_STRVAL_P(ret);
++
++	result = zend_string_alloc(len, 0);
++	target = ZSTR_VAL(result);
+ 	for (i = 0; i <= opline->extended_value; i++) {
+ 		memcpy(target, ZSTR_VAL(rope[i]), ZSTR_LEN(rope[i]));
+ 		target += ZSTR_LEN(rope[i]);
+ 		zend_string_release_ex(rope[i], 0);
+ 	}
+ 	*target = '\0';
+-
++    ZVAL_STR(EX_VAR(opline->result.var), result);
+ 	ZEND_VM_NEXT_OPCODE();
+ }
+ 
+diff --git a/Zend/zend_vm_execute.h b/Zend/zend_vm_execute.h
+index 209c77650c..411bafea51 100644
+--- a/Zend/zend_vm_execute.h
++++ b/Zend/zend_vm_execute.h
+@@ -6484,6 +6484,9 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str)) {
++			    ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CONST & (IS_TMP_VAR|IS_VAR)) {
+@@ -8383,6 +8386,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CONST_TMPVAR_HANDL
+ 			if (IS_CONST & (IS_TMP_VAR|IS_VAR)) {
+ 				zend_string_release_ex(op1_str, 0);
+ 			}
++			if (ZSTR_IS_LITERAL(op2_str)) {
++			    ZSTR_UNSET_LITERAL(&op2_str);
++			}
+ 		} else if ((IS_TMP_VAR|IS_VAR) != IS_CONST && UNEXPECTED(ZSTR_LEN(op2_str) == 0)) {
+ 			if (IS_CONST == IS_CONST || IS_CONST == IS_CV) {
+ 				ZVAL_STR_COPY(EX_VAR(opline->result.var), op1_str);
+@@ -8392,11 +8398,20 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CONST_TMPVAR_HANDL
+ 			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
+ 				zend_string_release_ex(op2_str, 0);
+ 			}
++
++// How can this one trigger?
++			// if (ZSTR_IS_LITERAL(op1_str)) {
++			//     ZSTR_UNSET_LITERAL(&op1_str);
++			// }
++
+ 		} else if (IS_CONST != IS_CONST && IS_CONST != IS_CV &&
+ 		    !ZSTR_IS_INTERNED(op1_str) && GC_REFCOUNT(op1_str) == 1) {
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str)) {
++			    ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
+@@ -8811,6 +8826,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_TMPVAR_
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str)) {
++			    ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
+@@ -10733,6 +10751,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CONST_CV_HANDLER(Z
+ 			if (IS_CONST & (IS_TMP_VAR|IS_VAR)) {
+ 				zend_string_release_ex(op1_str, 0);
+ 			}
++			if (ZSTR_IS_LITERAL(op2_str)) {
++			    ZSTR_UNSET_LITERAL(&op2_str);
++			}
+ 		} else if (IS_CV != IS_CONST && UNEXPECTED(ZSTR_LEN(op2_str) == 0)) {
+ 			if (IS_CONST == IS_CONST || IS_CONST == IS_CV) {
+ 				ZVAL_STR_COPY(EX_VAR(opline->result.var), op1_str);
+@@ -10742,11 +10763,20 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CONST_CV_HANDLER(Z
+ 			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
+ 				zend_string_release_ex(op2_str, 0);
+ 			}
++
++// How can this one trigger?
++			// if (ZSTR_IS_LITERAL(op1_str)) {
++			//     ZSTR_UNSET_LITERAL(&op1_str);
++			// }
++
+ 		} else if (IS_CONST != IS_CONST && IS_CONST != IS_CV &&
+ 		    !ZSTR_IS_INTERNED(op1_str) && GC_REFCOUNT(op1_str) == 1) {
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str)) {
++			    ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
+@@ -11161,6 +11191,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_CV_HAND
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str)) {
++			    ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
+@@ -14809,6 +14842,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_CONST_HANDL
+ 			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
+ 				zend_string_release_ex(op1_str, 0);
+ 			}
++			if (ZSTR_IS_LITERAL(op2_str)) {
++			    ZSTR_UNSET_LITERAL(&op2_str);
++			}
+ 		} else if (IS_CONST != IS_CONST && UNEXPECTED(ZSTR_LEN(op2_str) == 0)) {
+ 			if ((IS_TMP_VAR|IS_VAR) == IS_CONST || (IS_TMP_VAR|IS_VAR) == IS_CV) {
+ 				ZVAL_STR_COPY(EX_VAR(opline->result.var), op1_str);
+@@ -14818,11 +14854,20 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_CONST_HANDL
+ 			if (IS_CONST & (IS_TMP_VAR|IS_VAR)) {
+ 				zend_string_release_ex(op2_str, 0);
+ 			}
++
++// How can this one trigger?
++			// if (ZSTR_IS_LITERAL(op1_str)) {
++			//     ZSTR_UNSET_LITERAL(&op1_str);
++			// }
++
+ 		} else if ((IS_TMP_VAR|IS_VAR) != IS_CONST && (IS_TMP_VAR|IS_VAR) != IS_CV &&
+ 		    !ZSTR_IS_INTERNED(op1_str) && GC_REFCOUNT(op1_str) == 1) {
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str)) {
++			    ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CONST & (IS_TMP_VAR|IS_VAR)) {
+@@ -15551,6 +15596,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CONST_
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str)) {
++			    ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CONST & (IS_TMP_VAR|IS_VAR)) {
+@@ -16229,6 +16277,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_TMPVAR_HAND
+ 			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
+ 				zend_string_release_ex(op1_str, 0);
+ 			}
++			if (ZSTR_IS_LITERAL(op2_str)) {
++			    ZSTR_UNSET_LITERAL(&op2_str);
++			}
+ 		} else if ((IS_TMP_VAR|IS_VAR) != IS_CONST && UNEXPECTED(ZSTR_LEN(op2_str) == 0)) {
+ 			if ((IS_TMP_VAR|IS_VAR) == IS_CONST || (IS_TMP_VAR|IS_VAR) == IS_CV) {
+ 				ZVAL_STR_COPY(EX_VAR(opline->result.var), op1_str);
+@@ -16238,11 +16289,20 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_TMPVAR_HAND
+ 			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
+ 				zend_string_release_ex(op2_str, 0);
+ 			}
++
++// How can this one trigger?
++			// if (ZSTR_IS_LITERAL(op1_str)) {
++			//     ZSTR_UNSET_LITERAL(&op1_str);
++			// }
++
+ 		} else if ((IS_TMP_VAR|IS_VAR) != IS_CONST && (IS_TMP_VAR|IS_VAR) != IS_CV &&
+ 		    !ZSTR_IS_INTERNED(op1_str) && GC_REFCOUNT(op1_str) == 1) {
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str)) {
++			    ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
+@@ -16971,6 +17031,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_TMPVAR
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str)) {
++			    ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
+@@ -17903,6 +17966,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_CV_HANDLER(
+ 			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
+ 				zend_string_release_ex(op1_str, 0);
+ 			}
++			if (ZSTR_IS_LITERAL(op2_str)) {
++			    ZSTR_UNSET_LITERAL(&op2_str);
++			}
+ 		} else if (IS_CV != IS_CONST && UNEXPECTED(ZSTR_LEN(op2_str) == 0)) {
+ 			if ((IS_TMP_VAR|IS_VAR) == IS_CONST || (IS_TMP_VAR|IS_VAR) == IS_CV) {
+ 				ZVAL_STR_COPY(EX_VAR(opline->result.var), op1_str);
+@@ -17912,11 +17978,20 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_CV_HANDLER(
+ 			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
+ 				zend_string_release_ex(op2_str, 0);
+ 			}
++
++// How can this one trigger?
++			// if (ZSTR_IS_LITERAL(op1_str)) {
++			//     ZSTR_UNSET_LITERAL(&op1_str);
++			// }
++
+ 		} else if ((IS_TMP_VAR|IS_VAR) != IS_CONST && (IS_TMP_VAR|IS_VAR) != IS_CV &&
+ 		    !ZSTR_IS_INTERNED(op1_str) && GC_REFCOUNT(op1_str) == 1) {
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str)) {
++			    ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
+@@ -18283,6 +18358,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CV_HAN
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str)) {
++			    ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
+@@ -19451,8 +19529,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_ADD_SPEC_TMP_CONST_HANDLE
+ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_END_SPEC_TMP_CONST_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
+ {
+ 	USE_OPLINE
+-	zend_string **rope;
+-	zval *var, *ret;
++	zend_string **rope, *result;
++	zval *var;
+ 	uint32_t i;
+ 	size_t len = 0;
+ 	char *target;
+@@ -19491,16 +19569,16 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_END_SPEC_TMP_CONST_HANDLE
+ 	for (i = 0; i <= opline->extended_value; i++) {
+ 		len += ZSTR_LEN(rope[i]);
+ 	}
+-	ret = EX_VAR(opline->result.var);
+-	ZVAL_STR(ret, zend_string_alloc(len, 0));
+-	target = Z_STRVAL_P(ret);
++
++	result = zend_string_alloc(len, 0);
++	target = ZSTR_VAL(result);
+ 	for (i = 0; i <= opline->extended_value; i++) {
+ 		memcpy(target, ZSTR_VAL(rope[i]), ZSTR_LEN(rope[i]));
+ 		target += ZSTR_LEN(rope[i]);
+ 		zend_string_release_ex(rope[i], 0);
+ 	}
+ 	*target = '\0';
+-
++    ZVAL_STR(EX_VAR(opline->result.var), result);
+ 	ZEND_VM_NEXT_OPCODE();
+ }
+ 
+@@ -19927,8 +20005,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_ADD_SPEC_TMP_TMPVAR_HANDL
+ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_END_SPEC_TMP_TMPVAR_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
+ {
+ 	USE_OPLINE
+-	zend_string **rope;
+-	zval *var, *ret;
++	zend_string **rope, *result;
++	zval *var;
+ 	uint32_t i;
+ 	size_t len = 0;
+ 	char *target;
+@@ -19967,16 +20045,16 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_END_SPEC_TMP_TMPVAR_HANDL
+ 	for (i = 0; i <= opline->extended_value; i++) {
+ 		len += ZSTR_LEN(rope[i]);
+ 	}
+-	ret = EX_VAR(opline->result.var);
+-	ZVAL_STR(ret, zend_string_alloc(len, 0));
+-	target = Z_STRVAL_P(ret);
++
++	result = zend_string_alloc(len, 0);
++	target = ZSTR_VAL(result);
+ 	for (i = 0; i <= opline->extended_value; i++) {
+ 		memcpy(target, ZSTR_VAL(rope[i]), ZSTR_LEN(rope[i]));
+ 		target += ZSTR_LEN(rope[i]);
+ 		zend_string_release_ex(rope[i], 0);
+ 	}
+ 	*target = '\0';
+-
++    ZVAL_STR(EX_VAR(opline->result.var), result);
+ 	ZEND_VM_NEXT_OPCODE();
+ }
+ 
+@@ -20786,8 +20864,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_ADD_SPEC_TMP_CV_HANDLER(Z
+ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_END_SPEC_TMP_CV_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
+ {
+ 	USE_OPLINE
+-	zend_string **rope;
+-	zval *var, *ret;
++	zend_string **rope, *result;
++	zval *var;
+ 	uint32_t i;
+ 	size_t len = 0;
+ 	char *target;
+@@ -20826,16 +20904,16 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_END_SPEC_TMP_CV_HANDLER(Z
+ 	for (i = 0; i <= opline->extended_value; i++) {
+ 		len += ZSTR_LEN(rope[i]);
+ 	}
+-	ret = EX_VAR(opline->result.var);
+-	ZVAL_STR(ret, zend_string_alloc(len, 0));
+-	target = Z_STRVAL_P(ret);
++
++	result = zend_string_alloc(len, 0);
++	target = ZSTR_VAL(result);
+ 	for (i = 0; i <= opline->extended_value; i++) {
+ 		memcpy(target, ZSTR_VAL(rope[i]), ZSTR_LEN(rope[i]));
+ 		target += ZSTR_LEN(rope[i]);
+ 		zend_string_release_ex(rope[i], 0);
+ 	}
+ 	*target = '\0';
+-
++    ZVAL_STR(EX_VAR(opline->result.var), result);
+ 	ZEND_VM_NEXT_OPCODE();
+ }
+ 
+@@ -39011,6 +39089,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_CONST_HANDLER(Z
+ 			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
+ 				zend_string_release_ex(op1_str, 0);
+ 			}
++			if (ZSTR_IS_LITERAL(op2_str)) {
++			    ZSTR_UNSET_LITERAL(&op2_str);
++			}
+ 		} else if (IS_CONST != IS_CONST && UNEXPECTED(ZSTR_LEN(op2_str) == 0)) {
+ 			if (IS_CV == IS_CONST || IS_CV == IS_CV) {
+ 				ZVAL_STR_COPY(EX_VAR(opline->result.var), op1_str);
+@@ -39020,11 +39101,20 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_CONST_HANDLER(Z
+ 			if (IS_CONST & (IS_TMP_VAR|IS_VAR)) {
+ 				zend_string_release_ex(op2_str, 0);
+ 			}
++
++// How can this one trigger?
++			// if (ZSTR_IS_LITERAL(op1_str)) {
++			//     ZSTR_UNSET_LITERAL(&op1_str);
++			// }
++
+ 		} else if (IS_CV != IS_CONST && IS_CV != IS_CV &&
+ 		    !ZSTR_IS_INTERNED(op1_str) && GC_REFCOUNT(op1_str) == 1) {
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str)) {
++			    ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CONST & (IS_TMP_VAR|IS_VAR)) {
+@@ -41398,6 +41488,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CONST_HAND
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str)) {
++			    ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CONST & (IS_TMP_VAR|IS_VAR)) {
+@@ -42691,6 +42784,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_TMPVAR_HANDLER(
+ 			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
+ 				zend_string_release_ex(op1_str, 0);
+ 			}
++			if (ZSTR_IS_LITERAL(op2_str)) {
++			    ZSTR_UNSET_LITERAL(&op2_str);
++			}
+ 		} else if ((IS_TMP_VAR|IS_VAR) != IS_CONST && UNEXPECTED(ZSTR_LEN(op2_str) == 0)) {
+ 			if (IS_CV == IS_CONST || IS_CV == IS_CV) {
+ 				ZVAL_STR_COPY(EX_VAR(opline->result.var), op1_str);
+@@ -42700,11 +42796,20 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_TMPVAR_HANDLER(
+ 			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
+ 				zend_string_release_ex(op2_str, 0);
+ 			}
++
++// How can this one trigger?
++			// if (ZSTR_IS_LITERAL(op1_str)) {
++			//     ZSTR_UNSET_LITERAL(&op1_str);
++			// }
++
+ 		} else if (IS_CV != IS_CONST && IS_CV != IS_CV &&
+ 		    !ZSTR_IS_INTERNED(op1_str) && GC_REFCOUNT(op1_str) == 1) {
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str)) {
++			    ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
+@@ -45007,6 +45112,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_TMPVAR_HAN
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str)) {
++			    ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
+@@ -47696,6 +47804,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_CV_HANDLER(ZEND
+ 			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
+ 				zend_string_release_ex(op1_str, 0);
+ 			}
++			if (ZSTR_IS_LITERAL(op2_str)) {
++			    ZSTR_UNSET_LITERAL(&op2_str);
++			}
+ 		} else if (IS_CV != IS_CONST && UNEXPECTED(ZSTR_LEN(op2_str) == 0)) {
+ 			if (IS_CV == IS_CONST || IS_CV == IS_CV) {
+ 				ZVAL_STR_COPY(EX_VAR(opline->result.var), op1_str);
+@@ -47705,11 +47816,20 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_CV_HANDLER(ZEND
+ 			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
+ 				zend_string_release_ex(op2_str, 0);
+ 			}
++
++// How can this one trigger?
++			// if (ZSTR_IS_LITERAL(op1_str)) {
++			//     ZSTR_UNSET_LITERAL(&op1_str);
++			// }
++
+ 		} else if (IS_CV != IS_CONST && IS_CV != IS_CV &&
+ 		    !ZSTR_IS_INTERNED(op1_str) && GC_REFCOUNT(op1_str) == 1) {
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str)) {
++			    ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
+@@ -50112,6 +50232,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CV_HANDLER
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str)) {
++			    ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
+diff --git a/ext/standard/basic_functions.stub.php b/ext/standard/basic_functions.stub.php
+index 15abe44a0f..a7dcbaa924 100755
+--- a/ext/standard/basic_functions.stub.php
++++ b/ext/standard/basic_functions.stub.php
+@@ -952,6 +952,8 @@ function realpath_cache_size(): int {}
+ 
+ /* formatted_print.c */
+ 
++function lsprintf(string $format, mixed ... $values): string {}
++
+ function sprintf(string $format, mixed ...$values): string {}
+ 
+ function printf(string $format, mixed ...$values): int {}
+@@ -1422,6 +1424,8 @@ function is_object(mixed $value): bool {}
+ 
+ function is_scalar(mixed $value): bool {}
+ 
++function is_literal(mixed $value): bool {}
++
+ /** @param string $callable_name */
+ function is_callable(mixed $value, bool $syntax_only = false, &$callable_name = null): bool {}
+ 
+diff --git a/ext/standard/basic_functions_arginfo.h b/ext/standard/basic_functions_arginfo.h
+index 8e06402c0c..4fc7071b68 100644
+--- a/ext/standard/basic_functions_arginfo.h
++++ b/ext/standard/basic_functions_arginfo.h
+@@ -1,5 +1,5 @@
+ /* This is a generated file, edit the .stub.php file instead.
+- * Stub hash: 810b8bfbdf037702fcaec2ff81998c2bc2cefae8 */
++ * Stub hash: 2704abd563ef393af755e723069c739b1190d0aa */
+ 
+ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_set_time_limit, 0, 1, _IS_BOOL, 0)
+ 	ZEND_ARG_TYPE_INFO(0, seconds, IS_LONG, 0)
+@@ -1460,11 +1460,13 @@ ZEND_END_ARG_INFO()
+ 
+ #define arginfo_realpath_cache_size arginfo_ob_get_level
+ 
+-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_sprintf, 0, 1, IS_STRING, 0)
++ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_lsprintf, 0, 1, IS_STRING, 0)
+ 	ZEND_ARG_TYPE_INFO(0, format, IS_STRING, 0)
+ 	ZEND_ARG_VARIADIC_TYPE_INFO(0, values, IS_MIXED, 0)
+ ZEND_END_ARG_INFO()
+ 
++#define arginfo_sprintf arginfo_lsprintf
++
+ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_printf, 0, 1, IS_LONG, 0)
+ 	ZEND_ARG_TYPE_INFO(0, format, IS_STRING, 0)
+ 	ZEND_ARG_VARIADIC_TYPE_INFO(0, values, IS_MIXED, 0)
+@@ -1748,7 +1750,7 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_MASK_EX(arginfo_getrusage, 0, 0, MAY_BE_ARRAY|MA
+ ZEND_END_ARG_INFO()
+ #endif
+ 
+-#define arginfo_pack arginfo_sprintf
++#define arginfo_pack arginfo_lsprintf
+ 
+ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_MASK_EX(arginfo_unpack, 0, 2, MAY_BE_ARRAY|MAY_BE_FALSE)
+ 	ZEND_ARG_TYPE_INFO(0, format, IS_STRING, 0)
+@@ -2088,6 +2090,8 @@ ZEND_END_ARG_INFO()
+ 
+ #define arginfo_is_scalar arginfo_boolval
+ 
++#define arginfo_is_literal arginfo_boolval
++
+ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_is_callable, 0, 1, _IS_BOOL, 0)
+ 	ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
+ 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, syntax_only, _IS_BOOL, 0, "false")
+@@ -2620,6 +2624,7 @@ ZEND_FUNCTION(disk_total_space);
+ ZEND_FUNCTION(disk_free_space);
+ ZEND_FUNCTION(realpath_cache_get);
+ ZEND_FUNCTION(realpath_cache_size);
++ZEND_FUNCTION(lsprintf);
+ ZEND_FUNCTION(sprintf);
+ ZEND_FUNCTION(printf);
+ ZEND_FUNCTION(vprintf);
+@@ -2796,6 +2801,7 @@ ZEND_FUNCTION(is_string);
+ ZEND_FUNCTION(is_array);
+ ZEND_FUNCTION(is_object);
+ ZEND_FUNCTION(is_scalar);
++ZEND_FUNCTION(is_literal);
+ ZEND_FUNCTION(is_callable);
+ ZEND_FUNCTION(is_iterable);
+ ZEND_FUNCTION(is_countable);
+@@ -3261,6 +3267,7 @@ static const zend_function_entry ext_functions[] = {
+ 	ZEND_FALIAS(diskfreespace, disk_free_space, arginfo_diskfreespace)
+ 	ZEND_FE(realpath_cache_get, arginfo_realpath_cache_get)
+ 	ZEND_FE(realpath_cache_size, arginfo_realpath_cache_size)
++	ZEND_FE(lsprintf, arginfo_lsprintf)
+ 	ZEND_FE(sprintf, arginfo_sprintf)
+ 	ZEND_FE(printf, arginfo_printf)
+ 	ZEND_FE(vprintf, arginfo_vprintf)
+@@ -3449,6 +3456,7 @@ static const zend_function_entry ext_functions[] = {
+ 	ZEND_FE(is_array, arginfo_is_array)
+ 	ZEND_FE(is_object, arginfo_is_object)
+ 	ZEND_FE(is_scalar, arginfo_is_scalar)
++	ZEND_FE(is_literal, arginfo_is_literal)
+ 	ZEND_FE(is_callable, arginfo_is_callable)
+ 	ZEND_FE(is_iterable, arginfo_is_iterable)
+ 	ZEND_FE(is_countable, arginfo_is_countable)
+diff --git a/ext/standard/formatted_print.c b/ext/standard/formatted_print.c
+index bd0e668fca..473c4691d5 100644
+--- a/ext/standard/formatted_print.c
++++ b/ext/standard/formatted_print.c
+@@ -19,6 +19,7 @@
+ #include "ext/standard/head.h"
+ #include "php_string.h"
+ #include "zend_execute.h"
++#include "zend_exceptions.h"
+ #include <stdio.h>
+ 
+ #include <locale.h>
+@@ -776,6 +777,50 @@ PHP_FUNCTION(sprintf)
+ }
+ /* }}} */
+ 
++/* {{{ Return a formatted literal string */
++PHP_FUNCTION(lsprintf)
++{
++	zend_string *result;
++	zend_string *format;
++	zval *args, *arg;
++	int argc;
++
++	ZEND_PARSE_PARAMETERS_START(1, -1)
++		Z_PARAM_STR(format)
++		Z_PARAM_VARIADIC('*', args, argc)
++	ZEND_PARSE_PARAMETERS_END();
++
++    if (!ZSTR_IS_LITERAL(format)) {
++        zend_throw_error(zend_ce_value_error, "format must be a literal string");
++        return;
++    }
++
++    for (arg = args; arg < (args + argc); arg++) {
++        if (Z_TYPE_P(arg) > IS_STRING) {
++            zend_throw_error(zend_ce_value_error, 
++                "values must not contain non scalar variables");
++            return;
++        }
++
++        if (Z_TYPE_P(arg) == IS_STRING) {
++            if (!ZSTR_IS_LITERAL(Z_STR_P(arg))) {
++                zend_throw_error(zend_ce_value_error, 
++                    "values must not contain non literal strings");
++                return;
++            }
++        }
++    }
++
++	result = php_formatted_print(ZSTR_VAL(format), ZSTR_LEN(format), args, argc, 1);
++	if (result == NULL) {
++		RETURN_THROWS();
++	}
++
++	ZSTR_SET_LITERAL(&result);
++	RETVAL_STR(result);
++}
++/* }}} */
++
+ /* {{{ Return a formatted string */
+ PHP_FUNCTION(vsprintf)
+ {
+diff --git a/ext/standard/type.c b/ext/standard/type.c
+index 1036dd7d06..fd41a96498 100644
+--- a/ext/standard/type.c
++++ b/ext/standard/type.c
+@@ -397,6 +397,23 @@ PHP_FUNCTION(is_scalar)
+ }
+ /* }}} */
+ 
++/* {{{ Returns true if value is a literal string */
++PHP_FUNCTION(is_literal)
++{
++	zval *zv;
++
++	ZEND_PARSE_PARAMETERS_START(1, 1)
++		Z_PARAM_ZVAL(zv)
++	ZEND_PARSE_PARAMETERS_END();
++
++	if (Z_TYPE_P(zv) != IS_STRING) {
++	    RETURN_FALSE;
++	}
++
++    RETURN_BOOL(ZSTR_IS_LITERAL(Z_STR_P(zv)));
++}
++/* }}} */
++
+ /* {{{ Returns true if var is callable. */
+ PHP_FUNCTION(is_callable)
+ {
+diff --git a/ext/tokenizer/tokenizer_data.c b/ext/tokenizer/tokenizer_data.c
+index 96571bb1d7..996d5a3dea 100644
+--- a/ext/tokenizer/tokenizer_data.c
++++ b/ext/tokenizer/tokenizer_data.c
+@@ -25,55 +25,6 @@
+ 
+ 
+ void tokenizer_register_constants(INIT_FUNC_ARGS) {
+-	REGISTER_LONG_CONSTANT("T_THROW", T_THROW, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_INCLUDE", T_INCLUDE, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_INCLUDE_ONCE", T_INCLUDE_ONCE, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_REQUIRE", T_REQUIRE, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_REQUIRE_ONCE", T_REQUIRE_ONCE, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_LOGICAL_OR", T_LOGICAL_OR, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_LOGICAL_XOR", T_LOGICAL_XOR, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_LOGICAL_AND", T_LOGICAL_AND, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_PRINT", T_PRINT, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_YIELD", T_YIELD, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_DOUBLE_ARROW", T_DOUBLE_ARROW, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_YIELD_FROM", T_YIELD_FROM, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_PLUS_EQUAL", T_PLUS_EQUAL, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_MINUS_EQUAL", T_MINUS_EQUAL, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_MUL_EQUAL", T_MUL_EQUAL, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_DIV_EQUAL", T_DIV_EQUAL, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_CONCAT_EQUAL", T_CONCAT_EQUAL, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_MOD_EQUAL", T_MOD_EQUAL, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_AND_EQUAL", T_AND_EQUAL, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_OR_EQUAL", T_OR_EQUAL, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_XOR_EQUAL", T_XOR_EQUAL, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_SL_EQUAL", T_SL_EQUAL, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_SR_EQUAL", T_SR_EQUAL, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_POW_EQUAL", T_POW_EQUAL, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_COALESCE_EQUAL", T_COALESCE_EQUAL, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_COALESCE", T_COALESCE, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_BOOLEAN_OR", T_BOOLEAN_OR, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_BOOLEAN_AND", T_BOOLEAN_AND, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_IS_EQUAL", T_IS_EQUAL, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_IS_NOT_EQUAL", T_IS_NOT_EQUAL, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_IS_IDENTICAL", T_IS_IDENTICAL, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_IS_NOT_IDENTICAL", T_IS_NOT_IDENTICAL, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_SPACESHIP", T_SPACESHIP, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_IS_SMALLER_OR_EQUAL", T_IS_SMALLER_OR_EQUAL, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_IS_GREATER_OR_EQUAL", T_IS_GREATER_OR_EQUAL, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_SL", T_SL, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_SR", T_SR, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_INSTANCEOF", T_INSTANCEOF, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_INT_CAST", T_INT_CAST, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_DOUBLE_CAST", T_DOUBLE_CAST, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_STRING_CAST", T_STRING_CAST, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_ARRAY_CAST", T_ARRAY_CAST, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_OBJECT_CAST", T_OBJECT_CAST, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_BOOL_CAST", T_BOOL_CAST, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_UNSET_CAST", T_UNSET_CAST, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_POW", T_POW, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_CLONE", T_CLONE, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_ELSEIF", T_ELSEIF, CONST_CS | CONST_PERSISTENT);
+-	REGISTER_LONG_CONSTANT("T_ELSE", T_ELSE, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_LNUMBER", T_LNUMBER, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_DNUMBER", T_DNUMBER, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_STRING", T_STRING, CONST_CS | CONST_PERSISTENT);
+@@ -86,10 +37,24 @@ void tokenizer_register_constants(INIT_FUNC_ARGS) {
+ 	REGISTER_LONG_CONSTANT("T_CONSTANT_ENCAPSED_STRING", T_CONSTANT_ENCAPSED_STRING, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_STRING_VARNAME", T_STRING_VARNAME, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_NUM_STRING", T_NUM_STRING, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_INCLUDE", T_INCLUDE, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_INCLUDE_ONCE", T_INCLUDE_ONCE, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_EVAL", T_EVAL, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_REQUIRE", T_REQUIRE, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_REQUIRE_ONCE", T_REQUIRE_ONCE, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_LOGICAL_OR", T_LOGICAL_OR, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_LOGICAL_XOR", T_LOGICAL_XOR, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_LOGICAL_AND", T_LOGICAL_AND, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_PRINT", T_PRINT, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_YIELD", T_YIELD, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_YIELD_FROM", T_YIELD_FROM, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_INSTANCEOF", T_INSTANCEOF, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_NEW", T_NEW, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_CLONE", T_CLONE, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_EXIT", T_EXIT, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_IF", T_IF, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_ELSEIF", T_ELSEIF, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_ELSE", T_ELSE, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_ENDIF", T_ENDIF, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_ECHO", T_ECHO, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_DO", T_DO, CONST_CS | CONST_PERSISTENT);
+@@ -117,6 +82,7 @@ void tokenizer_register_constants(INIT_FUNC_ARGS) {
+ 	REGISTER_LONG_CONSTANT("T_TRY", T_TRY, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_CATCH", T_CATCH, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_FINALLY", T_FINALLY, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_THROW", T_THROW, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_USE", T_USE, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_INSTEADOF", T_INSTEADOF, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_GLOBAL", T_GLOBAL, CONST_CS | CONST_PERSISTENT);
+@@ -150,10 +116,41 @@ void tokenizer_register_constants(INIT_FUNC_ARGS) {
+ 	REGISTER_LONG_CONSTANT("T_FUNC_C", T_FUNC_C, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_NS_C", T_NS_C, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_ATTRIBUTE", T_ATTRIBUTE, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_PLUS_EQUAL", T_PLUS_EQUAL, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_MINUS_EQUAL", T_MINUS_EQUAL, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_MUL_EQUAL", T_MUL_EQUAL, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_DIV_EQUAL", T_DIV_EQUAL, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_CONCAT_EQUAL", T_CONCAT_EQUAL, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_MOD_EQUAL", T_MOD_EQUAL, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_AND_EQUAL", T_AND_EQUAL, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_OR_EQUAL", T_OR_EQUAL, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_XOR_EQUAL", T_XOR_EQUAL, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_SL_EQUAL", T_SL_EQUAL, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_SR_EQUAL", T_SR_EQUAL, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_COALESCE_EQUAL", T_COALESCE_EQUAL, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_BOOLEAN_OR", T_BOOLEAN_OR, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_BOOLEAN_AND", T_BOOLEAN_AND, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_IS_EQUAL", T_IS_EQUAL, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_IS_NOT_EQUAL", T_IS_NOT_EQUAL, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_IS_IDENTICAL", T_IS_IDENTICAL, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_IS_NOT_IDENTICAL", T_IS_NOT_IDENTICAL, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_IS_SMALLER_OR_EQUAL", T_IS_SMALLER_OR_EQUAL, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_IS_GREATER_OR_EQUAL", T_IS_GREATER_OR_EQUAL, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_SPACESHIP", T_SPACESHIP, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_SL", T_SL, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_SR", T_SR, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_INC", T_INC, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_DEC", T_DEC, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_INT_CAST", T_INT_CAST, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_DOUBLE_CAST", T_DOUBLE_CAST, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_STRING_CAST", T_STRING_CAST, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_ARRAY_CAST", T_ARRAY_CAST, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_OBJECT_CAST", T_OBJECT_CAST, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_BOOL_CAST", T_BOOL_CAST, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_UNSET_CAST", T_UNSET_CAST, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_OBJECT_OPERATOR", T_OBJECT_OPERATOR, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_NULLSAFE_OBJECT_OPERATOR", T_NULLSAFE_OBJECT_OPERATOR, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_DOUBLE_ARROW", T_DOUBLE_ARROW, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_COMMENT", T_COMMENT, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_DOC_COMMENT", T_DOC_COMMENT, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_OPEN_TAG", T_OPEN_TAG, CONST_CS | CONST_PERSISTENT);
+@@ -167,6 +164,9 @@ void tokenizer_register_constants(INIT_FUNC_ARGS) {
+ 	REGISTER_LONG_CONSTANT("T_PAAMAYIM_NEKUDOTAYIM", T_PAAMAYIM_NEKUDOTAYIM, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_NS_SEPARATOR", T_NS_SEPARATOR, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_ELLIPSIS", T_ELLIPSIS, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_COALESCE", T_COALESCE, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_POW", T_POW, CONST_CS | CONST_PERSISTENT);
++	REGISTER_LONG_CONSTANT("T_POW_EQUAL", T_POW_EQUAL, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_BAD_CHARACTER", T_BAD_CHARACTER, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("T_DOUBLE_COLON", T_PAAMAYIM_NEKUDOTAYIM, CONST_CS | CONST_PERSISTENT);
+ }
+@@ -175,55 +175,6 @@ char *get_token_type_name(int token_type)
+ {
+ 	switch (token_type) {
+ 
+-		case T_THROW: return "T_THROW";
+-		case T_INCLUDE: return "T_INCLUDE";
+-		case T_INCLUDE_ONCE: return "T_INCLUDE_ONCE";
+-		case T_REQUIRE: return "T_REQUIRE";
+-		case T_REQUIRE_ONCE: return "T_REQUIRE_ONCE";
+-		case T_LOGICAL_OR: return "T_LOGICAL_OR";
+-		case T_LOGICAL_XOR: return "T_LOGICAL_XOR";
+-		case T_LOGICAL_AND: return "T_LOGICAL_AND";
+-		case T_PRINT: return "T_PRINT";
+-		case T_YIELD: return "T_YIELD";
+-		case T_DOUBLE_ARROW: return "T_DOUBLE_ARROW";
+-		case T_YIELD_FROM: return "T_YIELD_FROM";
+-		case T_PLUS_EQUAL: return "T_PLUS_EQUAL";
+-		case T_MINUS_EQUAL: return "T_MINUS_EQUAL";
+-		case T_MUL_EQUAL: return "T_MUL_EQUAL";
+-		case T_DIV_EQUAL: return "T_DIV_EQUAL";
+-		case T_CONCAT_EQUAL: return "T_CONCAT_EQUAL";
+-		case T_MOD_EQUAL: return "T_MOD_EQUAL";
+-		case T_AND_EQUAL: return "T_AND_EQUAL";
+-		case T_OR_EQUAL: return "T_OR_EQUAL";
+-		case T_XOR_EQUAL: return "T_XOR_EQUAL";
+-		case T_SL_EQUAL: return "T_SL_EQUAL";
+-		case T_SR_EQUAL: return "T_SR_EQUAL";
+-		case T_POW_EQUAL: return "T_POW_EQUAL";
+-		case T_COALESCE_EQUAL: return "T_COALESCE_EQUAL";
+-		case T_COALESCE: return "T_COALESCE";
+-		case T_BOOLEAN_OR: return "T_BOOLEAN_OR";
+-		case T_BOOLEAN_AND: return "T_BOOLEAN_AND";
+-		case T_IS_EQUAL: return "T_IS_EQUAL";
+-		case T_IS_NOT_EQUAL: return "T_IS_NOT_EQUAL";
+-		case T_IS_IDENTICAL: return "T_IS_IDENTICAL";
+-		case T_IS_NOT_IDENTICAL: return "T_IS_NOT_IDENTICAL";
+-		case T_SPACESHIP: return "T_SPACESHIP";
+-		case T_IS_SMALLER_OR_EQUAL: return "T_IS_SMALLER_OR_EQUAL";
+-		case T_IS_GREATER_OR_EQUAL: return "T_IS_GREATER_OR_EQUAL";
+-		case T_SL: return "T_SL";
+-		case T_SR: return "T_SR";
+-		case T_INSTANCEOF: return "T_INSTANCEOF";
+-		case T_INT_CAST: return "T_INT_CAST";
+-		case T_DOUBLE_CAST: return "T_DOUBLE_CAST";
+-		case T_STRING_CAST: return "T_STRING_CAST";
+-		case T_ARRAY_CAST: return "T_ARRAY_CAST";
+-		case T_OBJECT_CAST: return "T_OBJECT_CAST";
+-		case T_BOOL_CAST: return "T_BOOL_CAST";
+-		case T_UNSET_CAST: return "T_UNSET_CAST";
+-		case T_POW: return "T_POW";
+-		case T_CLONE: return "T_CLONE";
+-		case T_ELSEIF: return "T_ELSEIF";
+-		case T_ELSE: return "T_ELSE";
+ 		case T_LNUMBER: return "T_LNUMBER";
+ 		case T_DNUMBER: return "T_DNUMBER";
+ 		case T_STRING: return "T_STRING";
+@@ -236,10 +187,24 @@ char *get_token_type_name(int token_type)
+ 		case T_CONSTANT_ENCAPSED_STRING: return "T_CONSTANT_ENCAPSED_STRING";
+ 		case T_STRING_VARNAME: return "T_STRING_VARNAME";
+ 		case T_NUM_STRING: return "T_NUM_STRING";
++		case T_INCLUDE: return "T_INCLUDE";
++		case T_INCLUDE_ONCE: return "T_INCLUDE_ONCE";
+ 		case T_EVAL: return "T_EVAL";
++		case T_REQUIRE: return "T_REQUIRE";
++		case T_REQUIRE_ONCE: return "T_REQUIRE_ONCE";
++		case T_LOGICAL_OR: return "T_LOGICAL_OR";
++		case T_LOGICAL_XOR: return "T_LOGICAL_XOR";
++		case T_LOGICAL_AND: return "T_LOGICAL_AND";
++		case T_PRINT: return "T_PRINT";
++		case T_YIELD: return "T_YIELD";
++		case T_YIELD_FROM: return "T_YIELD_FROM";
++		case T_INSTANCEOF: return "T_INSTANCEOF";
+ 		case T_NEW: return "T_NEW";
++		case T_CLONE: return "T_CLONE";
+ 		case T_EXIT: return "T_EXIT";
+ 		case T_IF: return "T_IF";
++		case T_ELSEIF: return "T_ELSEIF";
++		case T_ELSE: return "T_ELSE";
+ 		case T_ENDIF: return "T_ENDIF";
+ 		case T_ECHO: return "T_ECHO";
+ 		case T_DO: return "T_DO";
+@@ -267,6 +232,7 @@ char *get_token_type_name(int token_type)
+ 		case T_TRY: return "T_TRY";
+ 		case T_CATCH: return "T_CATCH";
+ 		case T_FINALLY: return "T_FINALLY";
++		case T_THROW: return "T_THROW";
+ 		case T_USE: return "T_USE";
+ 		case T_INSTEADOF: return "T_INSTEADOF";
+ 		case T_GLOBAL: return "T_GLOBAL";
+@@ -300,10 +266,41 @@ char *get_token_type_name(int token_type)
+ 		case T_FUNC_C: return "T_FUNC_C";
+ 		case T_NS_C: return "T_NS_C";
+ 		case T_ATTRIBUTE: return "T_ATTRIBUTE";
++		case T_PLUS_EQUAL: return "T_PLUS_EQUAL";
++		case T_MINUS_EQUAL: return "T_MINUS_EQUAL";
++		case T_MUL_EQUAL: return "T_MUL_EQUAL";
++		case T_DIV_EQUAL: return "T_DIV_EQUAL";
++		case T_CONCAT_EQUAL: return "T_CONCAT_EQUAL";
++		case T_MOD_EQUAL: return "T_MOD_EQUAL";
++		case T_AND_EQUAL: return "T_AND_EQUAL";
++		case T_OR_EQUAL: return "T_OR_EQUAL";
++		case T_XOR_EQUAL: return "T_XOR_EQUAL";
++		case T_SL_EQUAL: return "T_SL_EQUAL";
++		case T_SR_EQUAL: return "T_SR_EQUAL";
++		case T_COALESCE_EQUAL: return "T_COALESCE_EQUAL";
++		case T_BOOLEAN_OR: return "T_BOOLEAN_OR";
++		case T_BOOLEAN_AND: return "T_BOOLEAN_AND";
++		case T_IS_EQUAL: return "T_IS_EQUAL";
++		case T_IS_NOT_EQUAL: return "T_IS_NOT_EQUAL";
++		case T_IS_IDENTICAL: return "T_IS_IDENTICAL";
++		case T_IS_NOT_IDENTICAL: return "T_IS_NOT_IDENTICAL";
++		case T_IS_SMALLER_OR_EQUAL: return "T_IS_SMALLER_OR_EQUAL";
++		case T_IS_GREATER_OR_EQUAL: return "T_IS_GREATER_OR_EQUAL";
++		case T_SPACESHIP: return "T_SPACESHIP";
++		case T_SL: return "T_SL";
++		case T_SR: return "T_SR";
+ 		case T_INC: return "T_INC";
+ 		case T_DEC: return "T_DEC";
++		case T_INT_CAST: return "T_INT_CAST";
++		case T_DOUBLE_CAST: return "T_DOUBLE_CAST";
++		case T_STRING_CAST: return "T_STRING_CAST";
++		case T_ARRAY_CAST: return "T_ARRAY_CAST";
++		case T_OBJECT_CAST: return "T_OBJECT_CAST";
++		case T_BOOL_CAST: return "T_BOOL_CAST";
++		case T_UNSET_CAST: return "T_UNSET_CAST";
+ 		case T_OBJECT_OPERATOR: return "T_OBJECT_OPERATOR";
+ 		case T_NULLSAFE_OBJECT_OPERATOR: return "T_NULLSAFE_OBJECT_OPERATOR";
++		case T_DOUBLE_ARROW: return "T_DOUBLE_ARROW";
+ 		case T_COMMENT: return "T_COMMENT";
+ 		case T_DOC_COMMENT: return "T_DOC_COMMENT";
+ 		case T_OPEN_TAG: return "T_OPEN_TAG";
+@@ -317,6 +314,9 @@ char *get_token_type_name(int token_type)
+ 		case T_PAAMAYIM_NEKUDOTAYIM: return "T_DOUBLE_COLON";
+ 		case T_NS_SEPARATOR: return "T_NS_SEPARATOR";
+ 		case T_ELLIPSIS: return "T_ELLIPSIS";
++		case T_COALESCE: return "T_COALESCE";
++		case T_POW: return "T_POW";
++		case T_POW_EQUAL: return "T_POW_EQUAL";
+ 		case T_BAD_CHARACTER: return "T_BAD_CHARACTER";
+ 
+ 	}
