@@ -245,7 +245,7 @@ Literal string is the standard name for strings in source code. See [Google](htt
 
 Alternatives suggestions have included `is_from_literal()` from [Jakob Givoni](https://news-web.php.net/php.internals/109197). I think `is_safe_string()` might be asking for trouble. Other terms have included "compile time constants" and "code string".
 
-### Supporting Int/Float/Boolean values.
+### Int/Float/Boolean Values.
 
 When converting to string, they aren't guaranteed (and often don't) have the exact same value they have in source code.
 
@@ -253,27 +253,29 @@ For example, `TRUE` and `true` when cast to string give "1".
 
 It's also a very low value feature, where there might not be space for a flag to be added.
 
-### Supporting Concatenation
+### Performance
 
-This is the big question.
+Máté Kocsis has done some [primary testing on this implementation](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/tests/results/with-concat/kocsismate.pdf), and found a 0.124% performance hit for the Laravel Demo app, 0.161% for Symfony.
 
-Máté Kocsis has done some [primary testing on supporting string concat](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/tests/results/with-concat/kocsismate.pdf), and found a 0.124% performance hit for the Laravel Demo app, 0.161% for Symfony, and a more severe -3.719% when running this [concat test](https://github.com/kocsismate/php-version-benchmarks/blob/main/app/zend/concat.php#L25).
+There is a more severe 3.719% when running this [concat test](https://github.com/kocsismate/php-version-benchmarks/blob/main/app/zend/concat.php#L25), which is not representative of a typical PHP script (it's not normal to concatenate 4 strings, 5 million times, with no other actions).
 
-In my own [simplistic testing](https://github.com/craigfrancis/php-is-literal-rfc/tree/main/tests), where I included a basic version that did not support string concat. The [results](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/tests/results/with-concat/local.pdf) found:
+### String Concatenation
+
+Dan Ackroyd has been looking at an approach that does not use string concatenation at run time. The intention is to reduce the performance impact, and it might help developers identify their mistakes.
+
+Performance wise, I made up a test patch (not properly checked), to skip string concat at runtime, and with my own [simplistic testing](https://github.com/craigfrancis/php-is-literal-rfc/tree/main/tests) the [results](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/tests/results/with-concat/local.pdf) found:
 
     Laravel Demo App: +0.30% with, vs +0.18% without concat.
     Symfony Demo App: +0.06% with, vs +0.06% without concat.
     My Concat Test:   +4.36% with, vs +2.23% without concat.
 
-In my basic test, I used a RAM Disk, and disabled the processors Turbo Boost. With the Demo Apps, I used `/sapi/cgi/php-cgi "-T10"` to get the timings (so would include the compilation), and `/sapi/cli/php` for [My Concat Test](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/tests/001.phpt).
+There is still a small impact without concat because the `concat_function()` in "zend_operators.c" uses `zend_string_extend()` (where the literal flag needs to be removed). And in "zend_vm_def.h", it has a similar version; and supports a quick concat with an empty string, which doesn't create a new variable (x2) and would need its flag removed as well.
 
-There is still a small impact without concat because the `concat_function()` in "zend_operators.c" uses `zend_string_extend()` (where the literal flag needs to be removed). And in "zend_vm_def.h", it has a similar version; and supports a quick concat with an empty string, which doesn't create a new variable (x2) and would need it's flag removed as well.
+Technically runtime concat isn't needed for most libraries, like an ORM or Query Builder, where their methods nearly always take a small literal string. But it would make adoption of `is_literal()` easier for existing projects that are currently using string concat for their SQL, HTML Snippets, etc.
 
-Technically string concat isn't needed for most libraries, like an ORM or Query Builder, where their methods nearly always take a small literal string. But it would make adoption of is_literal() easier for existing projects that are currently using string concat for their SQL, HTML Templates, etc.
+Supporting runtime concat would make the is_literal() easier to understand, as it would be consistent with compiler and runtime concat (because the compiler can sometimes concat strings, creating a single literal that would have the literal flag set).
 
-And supporting runtime concat would make the literal check easier to understand, as it would be consistent (e.g. compiler vs runtime concat, where the compiler can concat two strings to create a single literal that has the literal flag set).
-
-The non-concat version would use `literal_combine()` or `literal_implode()` as special functions to avoid most of the work during runtime contact. Where Dan Ackroyd notes that these functions would make it easier to identify exactly where mistakes are made, rather than it being picked up at the end of a potentially long script, after multiple string concatenations, e.g.
+As to helping developers identifying their mistakes - by using `literal_combine()` or `literal_implode()`, Dan Ackroyd notes these functions would make it easier to identify where mistakes are made, rather than it being picked up at the end of a potentially long script, after multiple string concatenations, e.g.
 
 ```php
 $sortOrder = 'ASC';
@@ -293,15 +295,13 @@ If a developer changed the literal `'ASC'` to `$_GET['order']`, the error raised
 $sql = literal_combine($sql, ' ORDER BY name ', $sortOrder);
 ```
 
-### Performance
+### Non Literal Values
 
-TBC
+As noted by [Dennis Birkholz](https://news-web.php.net/php.internals/87667), Systems/Frameworks define certain variables (e.g. table name prefixes) without the use of a literal (e.g. ini/json/yaml files).
 
-See the section above.
+And Larry Garfield notes that in Drupal's ORM "the table name itself is user-defined" (not in the PHP script).
 
-### Values from INI/JSON/YAML
-
-As noted by [Dennis Birkholz](https://news-web.php.net/php.internals/87667), Systems/Frameworks that define certain variables (e.g. table name prefixes) without the use of a literal (e.g. ini/json/yaml files), might need to make some changes to use this feature (depending on where they use the is_literal check).
+It might be possible to move to using literals (which would help them verify the final string is still a literal), alternatively a Query Builder could be used, one that validates the majority of it's input are literals, and the exceptions can be accepted via appropriate validation (i.e. does this match a known table name).
 
 ### Existing String Functions
 
