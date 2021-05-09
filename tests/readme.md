@@ -7,26 +7,70 @@ Then apply the patches (with or without supporting string concat).
 
 Then compile them:
 
+Might need to brew install: icu4c, mhash
+
 ```
 cd ./src/a/;
 
 export PATH="/usr/local/opt/bison/bin:$PATH"
-export PKG_CONFIG_PATH="/usr/local/opt/openssl/lib/pkgconfig"
+export PKG_CONFIG_PATH="/usr/local/opt/openssl/lib/pkgconfig:/usr/local/opt/icu4c/lib/pkgconfig"
 ./buildconf
 ./configure \
     --enable-option-checking=fatal \
-    --with-iconv=/usr/local/opt/libiconv/ \
-    --with-openssl \
+    --enable-opcache \
+    --enable-fpm \
+    --enable-cgi \
+    --enable-bcmath \
+    --enable-calendar \
+    --enable-dba \
+    --enable-exif \
+    --enable-ftp \
+    --enable-gd \
+    --enable-mbregex \
     --enable-mbstring \
     --enable-mysqlnd \
-    --enable-opcache \
-    --with-pdo-sqlite=/usr \
+    --enable-pcntl \
+    --enable-phpdbg \
+    --enable-phpdbg-readline \
+    --enable-phpdbg-webhelper \
+    --enable-shmop \
+    --enable-soap \
+    --enable-sockets \
+    --enable-sysvmsg \
+    --enable-sysvsem \
+    --enable-sysvshm \
+    --enable-dtrace \
+    --enable-intl \
     --with-curl \
-    --enable-fpm \
-    --with-fpm-user=craig \
-    --with-fpm-group=staff \
-    --enable-cgi; \
-    say "Done";
+    --with-external-gd \
+    --with-external-pcre \
+    --with-ffi \
+    --with-fpm-user=_www \
+    --with-fpm-group=_www \
+    --with-iconv=/usr/local/opt/libiconv \
+    --with-layout=GNU \
+    --with-libxml \
+    --with-libedit \
+    --with-mhash=/usr/local/opt/mhash \
+    --with-mysql-sock=/tmp/mysql.sock \
+    --with-mysqli=mysqlnd \
+    --with-openssl \
+    --with-password-argon2=/usr/local/opt/argon2 \
+    --with-pdo-dblib=/usr/local/opt/freetds \
+    --with-pdo-mysql=mysqlnd \
+    --with-pdo-odbc=unixODBC,/usr/local/opt/unixodbc \
+    --with-pdo-pgsql=/usr/local/opt/libpq \
+    --with-pdo-sqlite=/usr \
+    --with-pgsql=/usr/local/opt/libpq \
+    --with-pic \
+    --with-pspell=/usr/local/opt/aspell \
+    --with-sodium \
+    --with-sqlite3 \
+    --with-unixODBC \
+    --with-xsl \
+    --with-zip \
+    --with-zlib \
+    ; say "Done";
 make && say "Done" || say "Error"; echo
 ```
 
