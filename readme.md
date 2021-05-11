@@ -32,15 +32,15 @@ By adding a way for libraries to check if the strings they receive came from the
 
 ## Why
 
-The [OWASP Top 10](https://owasp.org/www-project-top-ten/) lists common vulnerabilities sorted by prevalence, exploitability, detectability, and impact. Each ranked out of 3.
+The [OWASP Top 10](https://owasp.org/www-project-top-ten/) lists common vulnerabilities sorted by prevalence, exploitability, detectability, and impact. Each ranked out of 3. The current list (2017) continues to list these issues:
 
 **A1: Injection** - common prevalence (2), easy for attackers to detect/exploit (3), severe impact (3).
 
 **A7: XSS** - widespread prevalence (3), easy for attackers to detect/exploit (3), moderate impact (2).
 
-And these two have always been listed: 2003 (A6/A4), 2004 (A6/A4), 2007 (A2/A1), 2010 (A1/A2), 2013 (A1/A3), 2017 (A1/A7).
+These have always been listed: 2003 (A6/A4), 2004 (A6/A4), 2007 (A2/A1), 2010 (A1/A2), 2013 (A1/A3), 2017 (A1/A7).
 
-It's because these mistakes are very easy to make, and hard to identify - is_literal() directly addresses this problem.
+It's because these mistakes are very easy to make, and hard to identify - is_literal() directly addresses these vulnerabilities.
 
 ## Examples
 
@@ -75,15 +75,19 @@ If `createTemplate()` checked with `is_literal()`, the programmer could be advis
 echo $twig->createTemplate('<p>Hi {{ name }}</p>')->render(['name' => $_GET['name']]);
 ```
 
-## Failed Solutions
+## Alternatives
+
+What follows are some alternatives, which have been around for years.
+
+They have barely made any difference to the amount of Injection or XSS vulnerabilities.
 
 ### Education
 
-Developer training has not worked, it simply does not scale (people start programming every day), and learning about every single issue is difficult.
+Developer training simply does not scale (people start programming every day), and learning about every single issue is difficult.
 
 Keeping in mind that programmers will frequently do just enough to complete their task (busy), where they often copy/paste a solution to their problem they find online (risky), modify it for their needs (risky), then move on.
 
-We cannot keep saying they 'need to be careful', and relying on them to never make a mistake.
+We cannot keep saying they 'need to be careful', and rely on them to never make a mistake.
 
 ### Escaping
 
@@ -226,11 +230,11 @@ Undefined number of parameters; for example `WHERE IN`:
 
 ```php
 function where_in_sql($count) { // Should check for 0
-  $sql = [];
-  for ($k = 0; $k < $count; $k++) {
-    $sql[] = '?';
+  $sql = '?';
+  for ($k = 1; $k < $count; $k++) {
+    $sql .= ',?';
   }
-  return literal_implode(',', $sql);
+  return $sql;
 }
 $sql = literal_combine('WHERE id IN (', where_in_sql(count($ids)), ')');
 ```
@@ -251,11 +255,11 @@ When converting to string, they aren't guaranteed (and often don't) have the exa
 
 For example, `TRUE` and `true` when cast to string give "1".
 
-It's also a very low value feature, where there might not be space for a flag to be added.
+It's also a very low value feature, and there might not be space for a flag to be added.
 
 ### Performance
 
-Máté Kocsis has done some [primary testing on this implementation](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/tests/results/with-concat/kocsismate.pdf), and found a 0.124% performance hit for the Laravel Demo app, 0.161% for Symfony.
+Máté Kocsis has done some [primary testing on this implementation](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/tests/results/with-concat/kocsismate.pdf), and found a 0.124% performance hit for the Laravel Demo app, 0.161% for Symfony. These do not connect to a database, which would have made the difference even less.
 
 There is a more severe 3.719% when running this [concat test](https://github.com/kocsismate/php-version-benchmarks/blob/main/app/zend/concat.php#L25), which is not representative of a typical PHP script (it's not normal to concatenate 4 strings, 5 million times, with no other actions).
 
@@ -273,7 +277,7 @@ There is still a small impact without concat because the `concat_function()` in 
 
 Technically runtime concat isn't needed for most libraries, like an ORM or Query Builder, where their methods nearly always take a small literal string. But it would make adoption of `is_literal()` easier for existing projects that are currently using string concat for their SQL, HTML Snippets, etc.
 
-Supporting runtime concat would make the is_literal() easier to understand, as it would be consistent with compiler and runtime concat (because the compiler can sometimes concat strings, creating a single literal that would have the literal flag set).
+Supporting runtime concat would make the is_literal() easier to understand, as it would be consistent with compiler vs runtime concat (because the compiler can sometimes concat strings, creating a single literal that would have the literal flag set).
 
 As to helping developers identifying their mistakes - by using `literal_combine()` or `literal_implode()`, Dan Ackroyd notes these functions would make it easier to identify where mistakes are made, rather than it being picked up at the end of a potentially long script, after multiple string concatenations, e.g.
 
@@ -289,7 +293,7 @@ $sql .= ' ORDER BY name ' . $sortOrder;
 $db->query($sql);
 ```
 
-If a developer changed the literal `'ASC'` to `$_GET['order']`, the error raised by `$db->query()` would not be clear where the mistake was made. Whereas using `literal_combine()` highlights exactly where the issue happened:
+If a developer changed the literal `'ASC'` to `$_GET['order']`, the error raised by `$db->query()` would not be clear where the mistake was made. Whereas using `literal_combine()` would raise an exception, and highlight exactly where the issue happened:
 
 ```php
 $sql = literal_combine($sql, ' ORDER BY name ', $sortOrder);
@@ -361,9 +365,9 @@ N/A
 
 ## Implementation
 
-Dan Ackroyd has [started an implementation](https://github.com/php/php-src/compare/master...Danack:is_literal_attempt_two), which uses functions like [literal_combine()](https://github.com/php/php-src/compare/master...Danack:is_literal_attempt_two#diff-2b0486443df74cd919c949f33f895eacf97c34b8490e7554e032e770ab11e4d8R2761) to avoid performance concerns.
+Joe Watkins has [created an implementation](https://github.com/php/php-src/compare/master...krakjoe:literals), which supports string concat at runtime.
 
-Joe Watkins has [created an implementation](https://github.com/php/php-src/compare/master...krakjoe:literals) which supports string concat at runtime.
+Dan Ackroyd has [started an implementation](https://github.com/php/php-src/compare/master...Danack:is_literal_attempt_two), which provides the [literal_combine() and literal_implode()](https://github.com/php/php-src/compare/master...Danack:is_literal_attempt_two#diff-2b0486443df74cd919c949f33f895eacf97c34b8490e7554e032e770ab11e4d8R2761) functions.
 
 ## References
 
@@ -376,9 +380,9 @@ N/A
 ## Thanks
 
 - **Dan Ackroyd**, DanAck, for starting the first implementation (which made this a reality), and followup on the version that uses functions instead of string concat.
-- **Joe Watkins**, krakjoe, for finding how to set the literal flag (tricky), and creating the implementation that supports string concat.
+- **Joe Watkins**, krakjoe, for finding how to set the literal flag, and creating the implementation that supports string concat.
 - **Máté Kocsis**, mate-kocsis, for setting up and doing the performance testing.
 - **Rowan Tommins**, IMSoP, for re-writing this RFC to focus on the key features, and putting it in context of how it can be used by libraries.
 - **Nikita Popov**, NikiC, for suggesting where the literal flag could be stored. Initially this was going to be the "GC_PROTECTED flag for strings", which allowed Dan to start the first implementation.
-- **Mark Randall**, MarkR, for alternative ideas, and noting that "interned strings in PHP have a flag", which started the conversation on how this could be implemented.
+- **Mark Randall**, MarkR, for suggestions, and noting that "interned strings in PHP have a flag", which started the conversation on how this could be implemented.
 - **Xinchen Hui**, who created the Taint Extension, allowing me to test the idea; and noting how Taint in PHP5 was complex, but "with PHP7's new zend_string, and string flags, the implementation will become easier" [source](https://news-web.php.net/php.internals/87396).
