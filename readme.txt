@@ -91,7 +91,7 @@ We cannot keep saying they 'need to be careful', and rely on them to never make 
 
 ==== Escaping ====
 
-Escaping is hard, and error prone.
+Escaping is //hard//, and //error prone//.
 
 There is a long list of common [[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md#common-mistakes|escaping mistakes]].
 
@@ -111,9 +111,9 @@ This proposal avoids the complexity by addressing a different part of the proble
 
 While I agree with [[https://news-web.php.net/php.internals/109192|Tyson Andre]], it is highly recommended to use Static Analysis.
 
-But the *biggest* problem is that Static Analysis is simply not used by most developers, especially those who are new to programming (usage tends to be higher by those writing well tested libraries).
+The //biggest// problem is that Static Analysis is simply not used by most developers, especially those who are new to programming (usage tends to be higher by those writing well tested libraries).
 
-They also focus on other issues today (type checking, basic logic flaws, code formatting, etc).
+And they really focus on other issues (type checking, basic logic flaws, code formatting, etc).
 
 Those that do attempt to address injection vulnerabilities, do so via Taint Checking (see above), and are [[https://github.com/vimeo/psalm/commit/2122e4a1756dac68a83ec3f5abfbc60331630781|often incomplete]].
 
@@ -134,11 +134,14 @@ When psalm comes to taint checking the usage of a library (like Doctrine), it as
 This RFC proposes adding four functions:
 
   * //is_literal(string $string): bool// to check if a variable represents a value written into the source code or not.
+
   * //literal_implode(string $glue, array $pieces): string// - implode an array of literals, with a literal.
-  * //literal_combine(string $piece, string ...$pieces): string// - allow concatenating literal strings.
+  * //literal_concat(string $piece, string ...$pieces): string// - allow concatenating literal strings.
   * //literal_sprintf(string $format, string ...$values): string// - a version of sprintf that uses literals.
 
-A literal is defined as a value (string) which has been written by the programmer. The value may be passed between functions, as long as it is not modified in any way.
+A literal is defined as a value (string) which has been written by the programmer.
+
+The value may be passed between functions, as long as it is not modified in any way.
 
 <code php>
 is_literal('Example'); // true
@@ -147,10 +150,10 @@ $a = 'Hello';
 $b = 'World';
 
 is_literal($a); // true
-is_literal($a . $b); // TBC, details below.
+is_literal($a . $b); // true, details below.
 
-$c = literal_combine($a, $b);
-is_literal($c); // true
+$c = literal_concat($a, $b);
+is_literal($c); // true, details below.
 
 is_literal($_GET['id']); // false
 is_literal('WHERE id = ' . intval($_GET['id'])); // false
@@ -223,7 +226,7 @@ $order_fields = [
 
 $order_id = array_search(($_GET['sort'] ?? NULL), $order_fields);
 
-$sql = literal_combine(' ORDER BY ', $order_fields[$order_id]);
+$sql = literal_concat(' ORDER BY ', $order_fields[$order_id]);
 </code>
 
 Undefined number of parameters; for example //WHERE IN//:
@@ -236,7 +239,7 @@ function where_in_sql($count) { // Should check for 0
   }
   return $sql;
 }
-$sql = literal_combine('WHERE id IN (', where_in_sql(count($ids)), ')');
+$sql = literal_concat('WHERE id IN (', where_in_sql(count($ids)), ')');
 </code>
 
 ===== Considerations =====
@@ -259,7 +262,9 @@ It's also a very low value feature, and there might not be space for a flag to b
 
 ==== Performance ====
 
-Máté Kocsis has done some [[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/tests/results/with-concat/kocsismate.pdf|primary testing on this implementation]], and found a 0.124% performance hit for the Laravel Demo app, 0.161% for Symfony. These do not connect to a database, which would have made the difference even less.
+To do this testing, Máté Kocsis has created a [[https://github.com/kocsismate/php-version-benchmarks/|php benchmark]] to replicate the old [[https://01.org/node/3774|Intel Tests]].
+
+The [[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/tests/results/with-concat/kocsismate.pdf|preliminary testing on this implementation]] has found a 0.124% performance hit for the Laravel Demo app, 0.161% for Symfony (rounds 4-6, which involved 5000 requests). These tests do not connect to a database, which would have made the difference even less.
 
 There is a more severe 3.719% when running this [[https://github.com/kocsismate/php-version-benchmarks/blob/main/app/zend/concat.php#L25|concat test]], which is not representative of a typical PHP script (it's not normal to concatenate 4 strings, 5 million times, with no other actions).
 
@@ -279,7 +284,7 @@ Technically runtime concat isn't needed for most libraries, like an ORM or Query
 
 Supporting runtime concat would make the is_literal() easier to understand, as it would be consistent with compiler vs runtime concat (because the compiler can sometimes concat strings, creating a single literal that would have the literal flag set).
 
-As to helping developers identifying their mistakes - by using //literal_combine()// or //literal_implode()//, Dan Ackroyd notes these functions would make it easier to identify where mistakes are made, rather than it being picked up at the end of a potentially long script, after multiple string concatenations, e.g.
+As to helping developers identify their mistakes - by using //literal_concat()// or //literal_implode()//, Dan Ackroyd notes these functions would make it easier to identify where mistakes are made, rather than it being picked up at the end of a potentially long script, after multiple string concatenations, e.g.
 
 <code php>
 $sortOrder = 'ASC';
@@ -293,10 +298,10 @@ $sql .= ' ORDER BY name ' . $sortOrder;
 $db->query($sql);
 </code>
 
-If a developer changed the literal //'ASC'// to //$_GET['order']//, the error raised by //$db->query()// would not be clear where the mistake was made. Whereas using //literal_combine()// would raise an exception, and highlight exactly where the issue happened:
+If a developer changed the literal //'ASC'// to //$_GET['order']//, the error raised by //$db->query()// would not be clear where the mistake was made. Whereas using //literal_concat()// would raise an exception, and highlight exactly where the issue happened:
 
 <code php>
-$sql = literal_combine($sql, ' ORDER BY name ', $sortOrder);
+$sql = literal_concat($sql, ' ORDER BY name ', $sortOrder);
 </code>
 
 ==== Non Literal Values ====
@@ -311,11 +316,11 @@ While some systems will be able to use literals entirely, those that cannot will
 
 Trying to determine if the //is_literal// flag should be passed through functions like //str_repeat()//, or //substr()// etc is difficult. Having a security feature be difficult to reason about, gives a much higher chance of mistakes.
 
-For any use-case where dynamic strings are required, it would be better to build those strings with an appropriate query builder, or by using //literal_combine()/////literal_implode()//.
+For any use-case where dynamic strings are required, it would be better to build those strings with an appropriate query builder, or by using //literal_concat()/////literal_implode()//.
 
 ===== Backward Incompatible Changes =====
 
-No known BC breaks, except for code-bases that already contain userland functions //is_literal()//, //literal_implode()// or //literal_combine()//.
+No known BC breaks, except for code-bases that already contain userland functions //is_literal()//, //literal_implode()// or //literal_concat()//.
 
 ===== Proposed PHP Version(s) =====
 
@@ -367,7 +372,7 @@ N/A
 
 Joe Watkins has [[https://github.com/php/php-src/compare/master...krakjoe:literals|created an implementation]], which supports string concat at runtime.
 
-Dan Ackroyd has [[https://github.com/php/php-src/compare/master...Danack:is_literal_attempt_two|started an implementation]], which provides the [[https://github.com/php/php-src/compare/master...Danack:is_literal_attempt_two#diff-2b0486443df74cd919c949f33f895eacf97c34b8490e7554e032e770ab11e4d8R2761|literal_combine() and literal_implode()]] functions.
+Dan Ackroyd has [[https://github.com/php/php-src/compare/master...Danack:is_literal_attempt_two|started an implementation]], which provides the [[https://github.com/php/php-src/compare/master...Danack:is_literal_attempt_two#diff-2b0486443df74cd919c949f33f895eacf97c34b8490e7554e032e770ab11e4d8R2761|literal_concat() and literal_implode()]] functions.
 
 ===== References =====
 
