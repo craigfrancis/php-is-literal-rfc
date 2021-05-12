@@ -26,7 +26,7 @@ $db->query('SELECT * FROM users WHERE id = ' . $_GET['id']); // INSECURE
 
 If the library only accepted a literal SQL string (written by the programmer), and simply rejected the second example (not written as a literal), the library can provide an "inherently safe API".
 
-This definition of an "inherently safe API" comes from Christoph Kern, who did a talk in 2016 about [Preventing Security Bugs through Software Design](https://www.youtube.com/watch?v=ccfEu-Jj0as) (also at [USENIX Security 2015](https://www.usenix.org/conference/usenixsecurity15/symposium-program/presentation/kern)), which covers how this is used at Google. The idea is that we "Don't Blame the Developer, Blame the API"; where we need to put the burden on libraries (written once, used by many) to ensure that it's impossible for the developer to make these mistakes.
+This definition of an "inherently safe API" comes from Christoph Kern, who did a talk in 2016 about [Preventing Security Bugs through Software Design](https://www.youtube.com/watch?v=ccfEu-Jj0as) (also at [USENIX Security 2015](https://www.usenix.org/conference/usenixsecurity15/symposium-program/presentation/kern)), which covers how this concept is used at Google. The idea is that we "Don't Blame the Developer, Blame the API"; where we need to put the burden on libraries (written once, used by many) to ensure that it's impossible for the developer to make these mistakes.
 
 By adding a way for libraries to check if the strings they receive came from the developer (from trusted PHP source code), it allows the library to check they are being used in a safe way.
 
@@ -93,7 +93,7 @@ We cannot keep saying they 'need to be careful', and rely on them to never make 
 
 Escaping is hard, and error prone.
 
-We have a list of common [escaping mistakes](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md#common-mistakes).
+There is a long list of common [escaping mistakes](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification.md#common-mistakes).
 
 Developers should use parameterised queries (e.g. SQL), or a well tested library that knows how to escape values based on their context (e.g. HTML).
 
@@ -111,9 +111,11 @@ This proposal avoids the complexity by addressing a different part of the proble
 
 While I agree with [Tyson Andre](https://news-web.php.net/php.internals/109192), it is highly recommended to use Static Analysis.
 
-But they nearly always focus on other issues (type checking, basic logic flaws, code formatting, etc).
+But the *biggest* problem is that Static Analysis is simply not used by most developers, especially those who are new to programming (usage tends to be higher by those writing well tested libraries).
 
-Those that attempt to address injection vulnerabilities, do so via Taint Checking (see above), and are [often incomplete](https://github.com/vimeo/psalm/commit/2122e4a1756dac68a83ec3f5abfbc60331630781).
+They also focus on other issues today (type checking, basic logic flaws, code formatting, etc).
+
+Those that do attempt to address injection vulnerabilities, do so via Taint Checking (see above), and are [often incomplete](https://github.com/vimeo/psalm/commit/2122e4a1756dac68a83ec3f5abfbc60331630781).
 
 For a quick example, psalm, even in its strictest errorLevel (1), and/or running `--taint-analysis`, will not notice the missing quote marks in this SQL, and will incorrectly assume this is perfectly safe:
 
@@ -126,8 +128,6 @@ $db->prepare('SELECT * FROM users WHERE id = ' . $db->real_escape_string($id));
 ```
 
 When psalm comes to taint checking the usage of a library (like Doctrine), it assumes all methods are safe, because none of them note the sinks (and even if they did, you're back to escaping being an issue).
-
-But the biggest problem is that Static Analysis is simply not used by most developers, especially those who are new to programming (usage tends to be higher by those writing well tested libraries).
 
 ## Proposal
 
@@ -301,11 +301,11 @@ $sql = literal_combine($sql, ' ORDER BY name ', $sortOrder);
 
 ### Non Literal Values
 
-As noted by [Dennis Birkholz](https://news-web.php.net/php.internals/87667), Systems/Frameworks define certain variables (e.g. table name prefixes) without the use of a literal (e.g. ini/json/yaml files).
+As noted by [Dennis Birkholz](https://news-web.php.net/php.internals/87667), some Systems/Frameworks currently define certain variables (e.g. table name prefixes) without the use of a literal (e.g. ini/json/yaml).
 
 And Larry Garfield notes that in Drupal's ORM "the table name itself is user-defined" (not in the PHP script).
 
-It might be possible to move to using literals (which would help them verify the final string is still a literal), alternatively a Query Builder could be used, one that validates the majority of it's input are literals, and the exceptions can be accepted via appropriate validation (i.e. does this match a known table name).
+While some systems will be able to use literals entirely, those that cannot will be able to use a Query Builder - one that validates the majority of its input are literals, and the exceptions can be accepted via appropriate validation (i.e. does this string match a known table name).
 
 ### Existing String Functions
 
