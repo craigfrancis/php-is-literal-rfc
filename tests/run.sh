@@ -4,6 +4,7 @@
 export REDIRECT_STATUS=200;
 export REQUEST_METHOD="GET";
 export REQUEST_SCHEME="https";
+export REQUEST_URI="/";
 export APP_ENV="local";
 export APP_DEBUG=true;
 export SESSION_DRIVER=cookie;
