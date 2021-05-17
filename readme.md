@@ -193,24 +193,26 @@ I also agree that "SQL injection is almost a solved problem [by using] prepared 
 
 ## Usage
 
-By libraries:
+How a library could implement:
 
 ```php
 class db {
   protected $level = 2; // Probably should default to 1 at first.
   function literal_check($var) {
-    if (function_exists('is_literal') && !is_literal($var)) {
-      if ($this->level === 0) {
-        // Programmer aware, and is choosing to bypass this check.
-      } else if ($this->level === 1) {
-        trigger_error('Non-literal detected!', E_USER_WARNING);
-      } else {
-        throw new Exception('Non-literal detected!');
-      }
+    if (!function_exists('is_literal') || is_literal($var)) {
+      // Not supported, or is a programmer defined string.
+    } else if ($var instanceof unsafe_sql) {
+      // Not ideal, but at least you know this one is unsafe.
+    } else if ($this->level === 0) {
+      // Programmer aware, and is choosing to bypass this check.
+    } else if ($this->level === 1) {
+      trigger_error('Non-literal detected!', E_USER_WARNING);
+    } else {
+      throw new Exception('Non-literal detected!');
     }
   }
   function unsafe_disable_injection_protection() {
-    $this->level = 0;
+    $this->level = 0; // Not recommended, try unsafe_sql for special cases.
   }
   function where($sql, $parameters = []) {
     $this->literal_check($sql);
@@ -218,6 +220,21 @@ class db {
   }
 }
 
+class unsafe_sql {
+  private $value = '';
+  function __construct($unsafe_sql) {
+    $this->value = $unsafe_sql;
+  }
+  function __toString() {
+    return $this->value;
+  }
+}
+```
+
+Which would be used:
+
+```php
+$db = new db();
 $db->where('id = ?'); // OK
 $db->where('id = ' . $_GET['id']); // Exception thrown
 ```
