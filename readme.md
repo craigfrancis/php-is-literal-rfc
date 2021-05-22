@@ -53,7 +53,7 @@ $qb->select('u')
    ->where('u.id = ' . $_GET['id'])
 ```
 
-The definition of the `where()` method could check with `is_literal()` and throw an exception, advising the programmer to use placeholders:
+The definition of the `where()` method could check with `is_literal()` and advise the programmer to use placeholders:
 
 ```php
 $qb->select('u')
@@ -109,7 +109,7 @@ $html = "<img src=" . htmlentities($url) . " alt='' />";
 $html = "<a href='" . htmlentities($url) . "'>...";
 ```
 
-The first two need the values to be quoted, but would be considered "untained" (wrong). The third example, well htmlentities, before PHP 8.1 ([thank you very much](https://github.com/php/php-src/commit/50eca61f68815005f3b0f808578cc1ce3b4297f0)) does not escape single quotes by default, and it not does it consider what happens with 'javascript:' URLs.
+The first two need the values to be quoted, but would be considered "untained" (wrong). The third example, well htmlentities, before PHP 8.1 ([thank you very much](https://github.com/php/php-src/commit/50eca61f68815005f3b0f808578cc1ce3b4297f0)) does not escape single quotes by default, and it does not consider what happens with 'javascript:' URLs.
 
 This proposal avoids the complexity by addressing a different part of the problem: separating the inputs written by the programmer, from inputs supplied by the user.
 
