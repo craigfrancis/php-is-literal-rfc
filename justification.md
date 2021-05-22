@@ -68,7 +68,7 @@ Flawed because the attribute value is not quoted; e.g. `$url = '/ onerror=alert(
 echo "<img src='" . htmlentities($url) . "' alt='' />";
 ```
 
-Flawed because `htmlentities()` doesn't encode single quotes; e.g. `$url = "/' onerror='alert(1)"` (fixed in [PHP 8.2](https://github.com/php/php-src/commit/50eca61f68815005f3b0f808578cc1ce3b4297f0)).
+Flawed because `htmlentities()` doesn't encode single quotes; e.g. `$url = "/' onerror='alert(1)"` (fixed in [PHP 8.1](https://github.com/php/php-src/commit/50eca61f68815005f3b0f808578cc1ce3b4297f0)).
 
 ```php
 echo '<a href="' . htmlentities($url) . '">Link</a>';
