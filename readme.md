@@ -62,7 +62,7 @@ $qb->select('u')
    ->setParameter('identifier', $_GET['id']);
 ```
 
-Similarly, Twig allows [loading a template from a string](https://twig.symfony.com/doc/2.x/recipes.html#loading-a-template-from-a-string), which where it's easy to skip the default escaping functionality:
+Similarly, Twig allows [loading a template from a string](https://twig.symfony.com/doc/2.x/recipes.html#loading-a-template-from-a-string), where it's easy to skip the default escaping functionality:
 
 ```php
 // INSECURE
@@ -109,9 +109,9 @@ $html = "<img src=" . htmlentities($url) . " alt='' />";
 $html = "<a href='" . htmlentities($url) . "'>...";
 ```
 
-The first two need the values to be quoted, but would be considered "untained" (wrong). The third example, htmlentities before PHP 8.1 ([you're welcome](https://github.com/php/php-src/commit/50eca61f68815005f3b0f808578cc1ce3b4297f0)) does not escape single quotes by default, and it does not consider what happens with 'javascript:' URLs.
+The first two need the values to be quoted, but would be considered "untained" (wrong). The third example, htmlentities before PHP 8.1 ([fixed](https://github.com/php/php-src/commit/50eca61f68815005f3b0f808578cc1ce3b4297f0)) does not escape single quotes by default, and it does not consider what happens with 'javascript:' URLs.
 
-This proposal avoids the complexity by addressing a different part of the problem: separating the inputs written by the programmer, from inputs supplied by the user.
+This proposal avoids this complexity by addressing a different part of the problem: to keep the inputs written by the programmer separate from inputs supplied by the user.
 
 ### Static Analysis
 
@@ -142,7 +142,7 @@ This RFC proposes adding four functions:
 * `is_literal(string $string): bool` to check if a variable represents a value written into the source code or not.
 
 * `literal_implode(string $glue, array $pieces): string` - implode an array of literals, with a literal.
-* `literal_concat(string $piece, string ...$pieces): string` - allow concatenating literal strings.
+* `literal_concat(string $piece, string ...$pieces): string` - concatenating literal strings.
 * `literal_sprintf(string $format, string ...$values): string` - a version of sprintf that uses literals.
 
 A literal is defined as a value (string) which has been written by the programmer.
@@ -246,7 +246,7 @@ class db {
     } else if ($var instanceof unsafe_sql) {
       // Fine - Not ideal, but at least they know this one is unsafe.
     } else if ($this->protection_level === 0) {
-      // Fine - Programmer aware, and is choosing to disable this check everwhere.
+      // Fine - Programmer aware, and is choosing to disable this check everywhere.
     } else if ($this->protection_level === 1) {
       trigger_error('Non-literal detected!', E_USER_WARNING);
     } else {
@@ -372,7 +372,7 @@ There is a more severe 3.719% when running this [concat test](https://github.com
 
 ### String Concatenation
 
-Dan Ackroyd has considered an approach that does not use string concatenation at run time. The intention was to reduce the performance impact even further; where the `literal_concat()` or `literal_implode()` support functions can make it easier for developers identify their mistakes.
+Dan Ackroyd has considered an approach that does not use string concatenation at run time. The intention was to reduce the performance impact even further; and by using the `literal_concat()` or `literal_implode()` support functions, it can make it easier for developers identify their mistakes.
 
 Performance wise, I made up a test patch (not properly checked), to skip string concat at runtime, and with my own [simplistic testing](https://github.com/craigfrancis/php-is-literal-rfc/tree/main/tests) the [results](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/tests/results/with-concat/local.pdf) found:
 
