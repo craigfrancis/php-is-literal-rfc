@@ -40,7 +40,8 @@ This is why these two issues have always been on the [OWASP Top 10](https://owas
 
 Injection and XSS have **always** been on the list, and ranked:
 
-^  Year   ^  Injection Position  ^  XSS Position  ^
+|  Year   |  Injection Position  |  XSS Position  |
+| ------- | -------------------- | -------------- |
 |  2003   |  6                   |  4             |
 |  2004   |  6                   |  4             |
 |  2007   |  2                   |  **1**         |
