@@ -439,7 +439,7 @@ Trying to determine if the `is_literal` flag should be passed through functions 
 
 ### Reflection API
 
-It might be possible for the Reflection API to say if a the code calling a method used a literal string, but that's all it could do. It will not be able to support variables; or provide any future scope for these checks (aka "Phase 2").
+The Reflection API currently allows you to "introspect classes, interfaces, functions, methods and extensions"; it's not currently setup for an objects methods to inspect the code calling it. Even if that was to be added (unlikely), it could only be able to check if the literal was defined there, it couldn't handle variables (tracking back to their source), nor could it provide any future scope for these checks (aka "Phase 2").
 
 ## Backward Incompatible Changes
 
