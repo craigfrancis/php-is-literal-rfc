@@ -1,0 +1,480 @@
+diff --git a/ext/standard/basic_functions.c b/ext/standard/basic_functions.c
+index ee75395c4efb8..fc9de7c8dfa6d 100755
+--- a/ext/standard/basic_functions.c
++++ b/ext/standard/basic_functions.c
+@@ -126,6 +126,8 @@ static const zend_module_dep standard_deps[] = { /* {{{ */
+ };
+ /* }}} */
+ 
++PHPAPI zend_class_entry *literal_string_required_error_ce;
++
+ zend_module_entry basic_functions_module = { /* {{{ */
+ 	STANDARD_MODULE_HEADER_EX,
+ 	NULL,
+@@ -288,6 +290,7 @@ PHP_MINIT_FUNCTION(basic) /* {{{ */
+ 	php_register_incomplete_class_handlers();
+ 
+ 	assertion_error_ce = register_class_AssertionError(zend_ce_error);
++	literal_string_required_error_ce = register_class_LiteralStringRequiredError(zend_ce_error);
+ 
+ 	REGISTER_LONG_CONSTANT("CONNECTION_ABORTED", PHP_CONNECTION_ABORTED, CONST_CS | CONST_PERSISTENT);
+ 	REGISTER_LONG_CONSTANT("CONNECTION_NORMAL",  PHP_CONNECTION_NORMAL,  CONST_CS | CONST_PERSISTENT);
+@@ -2721,3 +2724,114 @@ PHP_FUNCTION(sys_getloadavg)
+ }
+ /* }}} */
+ #endif
++
++
++static int check_is_literal(zval *piece, int position)
++{
++	if (Z_TYPE_P(piece) != IS_STRING) {
++		zend_throw_exception_ex(
++				literal_string_required_error_ce,
++				0,
++				"Only literal strings allowed. Found bad type at position %d",
++				position
++		);
++		return -1;
++	}
++
++	if(!Z_IS_LITERAL(*piece)) {
++		zend_throw_exception_ex(
++			literal_string_required_error_ce,
++			0,
++			"Non-literal string found at position %d",
++			position
++		);
++		return -1;
++	}
++
++	return 0;
++}
++
++
++/* {{{ */
++PHP_FUNCTION(literal_concat)
++{
++	zval *piece;
++	zval *pieces;
++	int pieces_count = -1;
++
++	zval pieces_all;
++	int position = 0;
++	int ok;
++
++	array_init(&pieces_all);
++
++	ZEND_PARSE_PARAMETERS_START(1, -1)
++		Z_PARAM_ZVAL(piece)
++		Z_PARAM_VARIADIC('+', pieces, pieces_count)
++	ZEND_PARSE_PARAMETERS_END();
++
++	add_next_index_zval(&pieces_all, piece);
++
++	for (position = 0; position < pieces_count; position++) {
++		ok = check_is_literal(&pieces[position], position);
++		if (ok != 0) {
++			// Exception is set inside check_is_literal
++			RETURN_THROWS();
++		}
++		add_next_index_zval(&pieces_all, &pieces[position]);
++	}
++
++	zend_string *glue = zend_string_init("", sizeof("") - 1, 0);
++	php_implode(glue, Z_ARRVAL(pieces_all), return_value);
++	Z_SET_IS_LITERAL_P(return_value);
++}
++/* }}} */
++
++
++/* {{{ */
++PHP_FUNCTION(literal_implode)
++{
++	zval *pieces;
++	zval *piece;
++
++	zval *glue;
++	int position = 0;
++	int ok;
++
++	ZEND_PARSE_PARAMETERS_START(2, 2)
++		Z_PARAM_ZVAL(glue)
++		Z_PARAM_ARRAY(pieces)
++	ZEND_PARSE_PARAMETERS_END();
++
++
++	if (!glue || Z_TYPE_P(glue) != IS_STRING) {
++	    zend_throw_exception(
++			literal_string_required_error_ce,
++			"glue must be literal string",
++			0
++		);
++		RETURN_THROWS();
++	}
++
++	if(!Z_IS_LITERAL_P(glue)) {
++		zend_throw_exception(
++			literal_string_required_error_ce,
++			"glue must be literal string",
++			0
++		);
++		RETURN_THROWS();
++	}
++
++	ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(pieces), piece) {
++		ok = check_is_literal(piece, position);
++		if (ok != 0) {
++			// Exception is set inside check_is_literal
++			RETURN_THROWS();
++		}
++		position += 1;
++	} ZEND_HASH_FOREACH_END();
++
++	php_implode(Z_STR_P(glue), Z_ARRVAL_P(pieces), return_value);
++	Z_SET_IS_LITERAL_P(return_value);
++}
++/* }}} */
+diff --git a/ext/standard/basic_functions.stub.php b/ext/standard/basic_functions.stub.php
+index 7a859e809f9a8..7809eef697b06 100755
+--- a/ext/standard/basic_functions.stub.php
++++ b/ext/standard/basic_functions.stub.php
+@@ -381,6 +381,14 @@ function config_get_hash(): array {}
+ function sys_getloadavg(): array|false {}
+ #endif
+ 
++function literal_implode(string $glue, array $pieces): string {}
++
++function literal_concat(string $piece, string ...$pieces): string {}
++
++class LiteralStringRequiredError extends TypeError
++{
++}
++
+ /* browscap.c */
+ 
+ function get_browser(?string $user_agent = null, bool $return_array = false): object|array|false {}
+diff --git a/ext/standard/basic_functions_arginfo.h b/ext/standard/basic_functions_arginfo.h
+index ff9cb144f90f4..5820f68331f9f 100644
+--- a/ext/standard/basic_functions_arginfo.h
++++ b/ext/standard/basic_functions_arginfo.h
+@@ -1,5 +1,5 @@
+ /* This is a generated file, edit the .stub.php file instead.
+- * Stub hash: 2704abd563ef393af755e723069c739b1190d0aa */
++ * Stub hash: 6e4df4de64d77b517967061b93c1ba7334b1321d */
+ 
+ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_set_time_limit, 0, 1, _IS_BOOL, 0)
+ 	ZEND_ARG_TYPE_INFO(0, seconds, IS_LONG, 0)
+@@ -588,6 +588,16 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_MASK_EX(arginfo_sys_getloadavg, 0, 0, MAY_BE_ARR
+ ZEND_END_ARG_INFO()
+ #endif
+ 
++ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_literal_implode, 0, 2, IS_STRING, 0)
++	ZEND_ARG_TYPE_INFO(0, glue, IS_STRING, 0)
++	ZEND_ARG_TYPE_INFO(0, pieces, IS_ARRAY, 0)
++ZEND_END_ARG_INFO()
++
++ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_literal_concat, 0, 1, IS_STRING, 0)
++	ZEND_ARG_TYPE_INFO(0, piece, IS_STRING, 0)
++	ZEND_ARG_VARIADIC_TYPE_INFO(0, pieces, IS_STRING, 0)
++ZEND_END_ARG_INFO()
++
+ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_MASK_EX(arginfo_get_browser, 0, 0, MAY_BE_OBJECT|MAY_BE_ARRAY|MAY_BE_FALSE)
+ 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, user_agent, IS_STRING, 1, "null")
+ 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, return_array, _IS_BOOL, 0, "false")
+@@ -2388,6 +2398,8 @@ ZEND_FUNCTION(config_get_hash);
+ #if defined(HAVE_GETLOADAVG)
+ ZEND_FUNCTION(sys_getloadavg);
+ #endif
++ZEND_FUNCTION(literal_implode);
++ZEND_FUNCTION(literal_concat);
+ ZEND_FUNCTION(get_browser);
+ ZEND_FUNCTION(crc32);
+ ZEND_FUNCTION(crypt);
+@@ -3016,6 +3028,8 @@ static const zend_function_entry ext_functions[] = {
+ #if defined(HAVE_GETLOADAVG)
+ 	ZEND_FE(sys_getloadavg, arginfo_sys_getloadavg)
+ #endif
++	ZEND_FE(literal_implode, arginfo_literal_implode)
++	ZEND_FE(literal_concat, arginfo_literal_concat)
+ 	ZEND_FE(get_browser, arginfo_get_browser)
+ 	ZEND_FE(crc32, arginfo_crc32)
+ 	ZEND_FE(crypt, arginfo_crypt)
+@@ -3509,6 +3523,11 @@ static const zend_function_entry class_AssertionError_methods[] = {
+ 	ZEND_FE_END
+ };
+ 
++
++static const zend_function_entry class_LiteralStringRequiredError_methods[] = {
++	ZEND_FE_END
++};
++
+ static zend_class_entry *register_class___PHP_Incomplete_Class(void)
+ {
+ 	zend_class_entry ce, *class_entry;
+@@ -3529,3 +3548,13 @@ static zend_class_entry *register_class_AssertionError(zend_class_entry *class_e
+ 
+ 	return class_entry;
+ }
++
++static zend_class_entry *register_class_LiteralStringRequiredError(zend_class_entry *class_entry_TypeError)
++{
++	zend_class_entry ce, *class_entry;
++
++	INIT_CLASS_ENTRY(ce, "LiteralStringRequiredError", class_LiteralStringRequiredError_methods);
++	class_entry = zend_register_internal_class_ex(&ce, class_entry_TypeError);
++
++	return class_entry;
++}
+diff --git a/ext/standard/php_assert.h b/ext/standard/php_assert.h
+index 596632d9a5f12..efc2808051fd9 100644
+--- a/ext/standard/php_assert.h
++++ b/ext/standard/php_assert.h
+@@ -23,6 +23,7 @@ PHP_RINIT_FUNCTION(assert);
+ PHP_RSHUTDOWN_FUNCTION(assert);
+ PHP_MINFO_FUNCTION(assert);
+ 
++extern PHPAPI zend_class_entry *assertion_error_ce;
+ extern PHPAPI zend_class_entry *assertion_error_ce;
+ 
+ #endif /* PHP_ASSERT_H */
+diff --git a/ext/standard/tests/is_literal/is_literal_basic.phpt b/ext/standard/tests/is_literal/is_literal_basic.phpt
+new file mode 100644
+index 0000000000000..0dff11c6dd148
+--- /dev/null
++++ b/ext/standard/tests/is_literal/is_literal_basic.phpt
+@@ -0,0 +1,106 @@
++--TEST--
++Test is_literal() function
++--FILE--
++<?php
++
++if (is_literal('x') === true) {
++    echo "single char string as parameter is literal\n";
++}
++else {
++    echo "single char string as parameter is NOT literal\n";
++}
++
++$single_char_string = '?';
++if (is_literal($single_char_string) === true) {
++    echo "single char string as variable is literal\n";
++}
++else {
++    echo "single char string as variable is NOT literal\n";
++}
++
++if (is_literal('Foo') === true) {
++    echo "string as parameter is literal\n";
++}
++else {
++    echo "string as parameter is NOT literal\n";
++}
++
++$string = 'Foo 2';
++if (is_literal($string) === true) {
++    echo "string as variable is literal\n";
++}
++else {
++    echo "string as variable is NOT literal\n";
++}
++
++class Foo {
++    const CLASS_CONST = 'I am a class const';
++
++    public static string $static_property = 'I am an static property';
++
++    private string $instance_property = 'I am an instance property';
++
++    public function getInstanceProperty() {
++        return $this->instance_property;
++    }
++}
++
++// class constant
++if (is_literal(Foo::CLASS_CONST) === true) {
++    echo "class constant is literal\n";
++}
++else {
++    echo "class constant is NOT literal\n";
++}
++
++
++if (is_literal(Foo::$static_property) === true) {
++    echo "class static property is literal\n";
++}
++else {
++    echo "class static property is NOT literal\n";
++}
++
++$foo = new Foo();
++if (is_literal($foo->getInstanceProperty()) === true) {
++    echo "class instance property is literal\n";
++}
++else {
++    echo "class instance property is NOT literal\n";
++}
++
++define('CONST_VALUE', 'foobar');
++
++if (is_literal(CONST_VALUE) === true) {
++    echo "constant is literal\n";
++}
++else {
++    echo "constant is NOT literal\n";
++}
++
++$foo = 'foo';
++$bar = 'foo';
++
++$foobar = $foo . $bar;
++
++if (is_literal($foobar) === true) {
++    echo "foobar is incorrectly literal.\n";
++}
++else {
++    echo "foobar is correctly not literal.\n";
++}
++
++echo "Done\n";
++
++?>
++--EXPECTF--
++single char string as parameter is literal
++single char string as variable is literal
++string as parameter is literal
++string as variable is literal
++class constant is literal
++class static property is literal
++class instance property is literal
++constant is literal
++foobar is correctly not literal.
++Done
+diff --git a/ext/standard/tests/is_literal/literal_concat.phpt b/ext/standard/tests/is_literal/literal_concat.phpt
+new file mode 100644
+index 0000000000000..0529624b7d4a2
+--- /dev/null
++++ b/ext/standard/tests/is_literal/literal_concat.phpt
+@@ -0,0 +1,45 @@
++--TEST--
++Test is_literal() function
++--FILE--
++<?php
++
++$zok = 'zok';
++$fot = 'fot';
++$pik = 'pik';
++
++$result = literal_concat($zok, $fot, $pik);
++$result_is_literal = is_literal($result);
++
++if ($result_is_literal === true) {
++    echo "Result of literal_concat is correctly a literal.\n";
++}
++else {
++    echo "Result of literal_concat is NOT a literal.\n";
++}
++
++try {
++    $non_literal_string =  $pik . " other string";
++    literal_concat($zok, $fot, $non_literal_string);
++    echo "literal_concat failed to throw exception for non-literal string.\n";
++}
++catch (LiteralStringRequiredError $e) {
++    echo $e->getMessage(), "\n";
++}
++
++
++try {
++    literal_concat($zok, $fot, new StdClass);
++    echo "literal_concat failed to throw exception for incorrect type.\n";
++}
++catch (LiteralStringRequiredError $e) {
++    echo $e->getMessage(), "\n";
++}
++
++echo "Done\n";
++
++?>
++--EXPECTF--
++Result of literal_concat is correctly a literal.
++Non-literal string found at position, 1
++Only literal strings allowed. Found bad type at position %d
++Done
+diff --git a/ext/standard/tests/is_literal/literal_implode.phpt b/ext/standard/tests/is_literal/literal_implode.phpt
+new file mode 100644
+index 0000000000000..6c0aee8fa654e
+--- /dev/null
++++ b/ext/standard/tests/is_literal/literal_implode.phpt
+@@ -0,0 +1,72 @@
++--TEST--
++Test is_literal() function
++--FILE--
++<?php
++
++$glue = ', ';
++$question_mark = '?';
++
++$pieces = [$question_mark, $question_mark, $question_mark];
++$result = literal_implode($glue, $pieces);
++echo "imploded string: '$result'\n";
++
++if (is_literal($result) === true) {
++    echo "imploded string is correctly literal\n";
++}
++else {
++    echo "imploded string is NOT literal\n";
++}
++
++$pieces = array_fill(0, 5, '?');
++$result = literal_implode('-', $pieces);
++if (is_literal($result) === true) {
++    echo "imploded string is correctly literal for array_fill\n";
++}
++else {
++    echo "imploded string is NOT literal for array_fill\n";
++}
++if ($result !== '?-?-?-?-?') {
++    echo "Imploded string is not '?-?-?-?-?' but instead $result\n";
++}
++
++$non_literal_string = 'Foo' . rand(1000, 2000);
++
++if (is_literal($non_literal_string) === false) {
++    echo "non_literal_string is correctly not literal\n";
++}
++else {
++    echo "non_literal_string is falsely literal, aborting tests.\n";
++    exit(-1);
++}
++
++try {
++    $result = literal_implode($non_literal_string, $pieces);
++    echo "literal_implode failed to throw exception for non-literal glue.\n";
++}
++catch(LiteralStringRequiredError $e) {
++    echo $e->getMessage(), "\n";
++}
++
++
++$pieces = [$question_mark, $non_literal_string, $question_mark];
++
++try {
++    $result = literal_implode($glue, $pieces);
++    echo "literal_implode failed to throw exception for non-literal piece.\n";
++}
++catch(LiteralStringRequiredError $e) {
++    echo $e->getMessage(), "\n";
++}
++
++
++echo "Done\n";
++
++?>
++--EXPECTF--
++imploded string: '?, ?, ?'
++imploded string is correctly literal
++imploded string is correctly literal for array_fill
++non_literal_string is correctly not literal
++glue must be literal string
++Non-literal string found at position %d
++Done
