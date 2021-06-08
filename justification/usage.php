@@ -20,7 +20,7 @@
 
 
 	var_dump(is_literal($_GET['id'] ?? NULL)); // false
-	var_dump(is_literal('WHERE id = ' . intval($_GET['id'] ?? NULL))); // false
+	var_dump(is_literal('WHERE id = ' . ($_GET['id'] ?? NULL))); // false
 	var_dump(is_literal('<input name="q" value="' . ($_GET['q'] ?? NULL) . '" />')); // false
 	var_dump(is_literal('/bin/rm -rf ' . ($_GET['path'] ?? NULL))); // false
 	var_dump(is_literal(rand(0, 10))); // false
