@@ -38,7 +38,7 @@
 		function query($sql, $parameters = [], $aliases = []) {
 
 			if (!$this->pdo) {
-				 $this->pdo = new PDO('mysql:dbname=...;host=...', '...', '...', [PDO::ATTR_EMULATE_PREPARES => false]);
+				// $this->pdo = new PDO('mysql:dbname=...;host=...', '...', '...', [PDO::ATTR_EMULATE_PREPARES => false]);
 			}
 
 			$this->literal_check($sql);
@@ -51,6 +51,10 @@
 				} else {
 					$sql = str_replace('{' . $name . '}', '`' . $value . '`', $sql);
 				}
+			}
+
+			if (!$this->pdo) { // Erm, we don't have a database to connect to :-)
+				return 'Great, it worked!';
 			}
 
 			$statement = $this->pdo->prepare($sql);
@@ -80,19 +84,26 @@
 //--------------------------------------------------
 // Normal use:
 
+
 	$id = sprintf('1'); // Using sprintf() so it's not marked as a literal, e.g. $_GET['id']
 
 	var_dump($db->query('SELECT name FROM user WHERE id = ?', [$id]));
 
-	try {
-		var_dump($db->query('SELECT name FROM user WHERE id = ' . $id));
-	} catch (exception $e) {
-		var_dump('Caught SQLi vulnerability!');
-	}
+	var_dump($db->query('SELECT name FROM user WHERE id = ' . $id)); // Creates a warning, but still continues.
 
-	// Doctrine can protect itself with DQL and SQL:
+
+	// If you want to enforce this check with exceptions:
+	//   $db->enforce_injection_protection();
+	//   try {
+	//   	var_dump($db->query('SELECT name FROM user WHERE id = ' . $id));
+	//   } catch (exception $e) {
+	//   	var_dump('Caught SQLi vulnerability!');
+	//   }
+
+
+	// This is how Doctrine can protect itself with mistakes in DQL and SQL:
 	//   https://www.doctrine-project.org/projects/doctrine-orm/en/latest/reference/security.html
-	//	 https://www.doctrine-project.org/projects/doctrine-dbal/en/latest/reference/security.html
+	//   https://www.doctrine-project.org/projects/doctrine-dbal/en/latest/reference/security.html
 	//
 	// For example:
 	//   $em->createQuery("SELECT u FROM User u WHERE u.id = $_GET[id]");
@@ -101,7 +112,8 @@
 	// Same with Drupal:
 	//	https://www.drupal.org/node/101496
 
-	echo "\n";
+
+	echo "\n--------------------------------------------------\n\n";
 
 //--------------------------------------------------
 // Complex example, and still doesn't use unsafe_sql:
@@ -124,12 +136,23 @@
 	$ids = array_filter(explode(',', $ids));
 
 	if (count($ids) > 0) {
-		 $in_sql = '?';
-		 for ($k = count($ids); $k > 1; $k--) {
-			 $in_sql .= ',?'; // Could also use implode()
-		 }
-		 $where_sql .= ' AND u.id IN (' . $in_sql . ')'; // Database abstractions can simplify this.
-		 $parameters = array_merge($parameters, $ids);
+
+		// The standard practice approach already works, with no modification:
+		//   Levi Morrison             = https://stackoverflow.com/a/23641033/538216
+		//   PDO Execute               = https://www.php.net/manual/en/pdostatement.execute.php#example-1012
+		//   Drupal Multiple Arguments = https://www.drupal.org/docs/7/security/writing-secure-code/database-access#s-multiple-arguments
+
+		$in_sql = join(',', array_fill(0, count($ids), '?'));
+
+		// Or, if you want just want to use simple concatenation:
+		//   $in_sql = '?';
+		//   for ($k = count($ids); $k > 1; $k--) {
+		//   	$in_sql .= ',?';
+		//   }
+
+		$where_sql .= ' AND u.id IN (' . $in_sql . ')'; // And database abstractions can simplify this.
+		$parameters = array_merge($parameters, $ids);
+
 	}
 
 
@@ -145,8 +168,9 @@
 
 
 
+	$order_by = ($_GET['sort'] ?? NULL);
 	$order_fields = ['name', 'email'];
-	$order_id = array_search(($_GET['sort'] ?? NULL), $order_fields);
+	$order_id = array_search($order_by, $order_fields);
 	$sql .= '
 		ORDER BY ' . $order_fields[$order_id]; // Limited to known-safe fields.
 
@@ -154,17 +178,18 @@
 
 	$sql .= '
 		LIMIT
-			 ?, ?';
+			?, ?';
 	$parameters[] = 0;
 	$parameters[] = 3;
 
 
 
 
-	var_dump($sql, $parameters);
+	var_dump(is_literal($sql), $sql, $parameters);
+
 	var_dump($db->query($sql, $parameters));
 
-	echo "\n";
+	echo "\n--------------------------------------------------\n\n";
 
 //--------------------------------------------------
 // And if table/field/etc names cannot be included
@@ -199,7 +224,7 @@
 	var_dump($sql, $parameters, $aliases);
 	var_dump($db->query($sql, $parameters, $aliases));
 
-	echo "\n";
+	echo "\n--------------------------------------------------\n\n";
 
 //--------------------------------------------------
 // Use in other contexts
@@ -208,19 +233,19 @@
 
 	function html_template() { return NULL; }
 	function run_command()   { return NULL; }
-	function run_eval()	     { return NULL; }
+	function run_eval()      { return NULL; }
 
-	var_dump(html_template('<input name="q" value="?" />', [
+	$output = html_template('<input name="q" value="?" />', [
 			$query
-		]));
+		]);
 
-	var_dump(run_command('/my/script.sh ?', [
+	$output = run_command('/my/script.sh ?', [
 			$query,
-		]));
+		]);
 
-	var_dump(run_eval('echo ?;', [
+	$output = run_eval('echo ?;', [
 			$query,
-		]));
+		]);
 
 	// $additional_params in mail()
 	// $expression in $xpath->query()
