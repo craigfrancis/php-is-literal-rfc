@@ -1,12 +1,16 @@
 <?php
 
+//--------------------------------------------------
+
 
 	var_dump(is_literal('Example')); // true
 	var_dump(is_literal(sprintf('Example'))); // false, modified output from a function is not a literal.
 
 
-	echo "\n" . 'Variables and concatenation' . "\n";
+//--------------------------------------------------
 
+
+	echo "\n" . 'Variables and concatenation' . "\n";
 
 	$a = 'Hello';
 	$b = 'World';
@@ -16,19 +20,26 @@
 	var_dump(is_literal("Hi $b")); // true
 
 
+//--------------------------------------------------
+
+
 	echo "\n" . 'Values that must be rejected' . "\n";
 
+	$id = ($_GET['id'] ?? sprintf('id')); // Using sprintf so the default isn't a literal either.
 
-	var_dump(is_literal($_GET['id'] ?? NULL)); // false
-	var_dump(is_literal('WHERE id = ' . ($_GET['id'] ?? NULL))); // false
-	var_dump(is_literal('<input name="q" value="' . ($_GET['q'] ?? NULL) . '" />')); // false
-	var_dump(is_literal('/bin/rm -rf ' . ($_GET['path'] ?? NULL))); // false
+	var_dump(is_literal($id)); // false
 	var_dump(is_literal(rand(0, 10))); // false
 	var_dump(is_literal(sprintf('Example %d', true))); // false
+	var_dump(is_literal('/bin/rm -rf ' . $id)); // false
+	var_dump(is_literal('<img src=' . htmlentities($id) . ' />')); // false... try ./?id=%2F+onerror%3Dalert%281%29
+	var_dump(is_literal('WHERE id = ' . mysqli_fake_escape_string($id))); // false... try ./?id=id
+	var_dump(is_literal(sprintf('LIMIT %d', 3))); // false
+
+
+//--------------------------------------------------
 
 
 	echo "\n" . 'Usage with functions:' . "\n";
-
 
 	function example($input) {
 		if (!is_literal($input)) {
@@ -47,8 +58,10 @@
 	}
 
 
-	echo "\n\n" . 'Native functions that support string concatenation:' . "\n";
+//--------------------------------------------------
 
+
+	echo "\n\n" . 'Native functions that support string concatenation:' . "\n";
 
 	echo "\n" . 'str_repeat()' . "\n";
 	var_dump(is_literal(str_repeat($a, 10))); // true
@@ -77,5 +90,11 @@
 	var_dump(is_literal(array_fill(0, 10, $a)[5])); // true
 	var_dump(is_literal(array_fill(0, 10, rand(1, 10))[5])); // false
 
+
+//--------------------------------------------------
+// Ignore this, it's just so it runs, the real
+// version does not protect against this vulnerability.
+
+	function mysqli_fake_escape_string($input) { return $input; }
 
 ?>
