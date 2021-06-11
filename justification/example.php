@@ -3,17 +3,17 @@
 //--------------------------------------------------
 // How an ORM or HTML Templating system can use:
 
-	class db {
+	class example_library {
 
 		private $pdo = NULL;
 		protected $protection_level = 1;
 			// 1 = Just warnings
-			// 2 = Exceptions, maybe the default in a few years.
+			// 2 = Exceptions, if you want to be absolutely sure.
 
 		function literal_check($var) {
 			if (!function_exists('is_literal') || is_literal($var)) {
 				// Fine - This is a programmer defined string (bingo), or not using PHP 8.1
-			} else if ($var instanceof unsafe_sql) {
+			} else if ($var instanceof unsafe_value) {
 				// Fine - Not ideal, but at least they know this one is unsafe.
 			} else if ($this->protection_level === 0) {
 				// Fine - Programmer aware, and is choosing to disable this check everywhere.
@@ -27,10 +27,10 @@
 			$this->protection_level = 2;
 		}
 		function unsafe_disable_injection_protection() {
-			$this->protection_level = 0; // Not recommended, try a `new unsafe_sql('XXX')` for special cases.
+			$this->protection_level = 0; // Not recommended, try `new unsafe_value('XXX')` for special cases.
 		}
 
-		function where($sql, $parameters = [], $aliases = []) {
+		function where($sql, $parameters = []) {
 			$this->literal_check($sql); // Used any time an argument should be checked.
 			// ...
 		}
@@ -65,16 +65,16 @@
 
 	}
 
-	$db = new db();
+	$db = new example_library();
 
 //--------------------------------------------------
 // While you should never need it; the example
 // library above will also accept this value-object:
 
-	class unsafe_sql {
+	class unsafe_value {
 		private $value = '';
-		function __construct($unsafe_sql) {
-			$this->value = $unsafe_sql;
+		function __construct($unsafe_value) {
+			$this->value = $unsafe_value;
 		}
 		function __toString() {
 			return $this->value;
@@ -116,7 +116,7 @@
 	echo "\n--------------------------------------------------\n\n";
 
 //--------------------------------------------------
-// Complex example, and still doesn't use unsafe_sql:
+// Complex example, and still doesn't use unsafe_value:
 
 	$parameters = [];
 
