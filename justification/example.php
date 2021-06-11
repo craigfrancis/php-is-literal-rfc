@@ -293,12 +293,8 @@
 
 	$query = ($_GET['q'] ?? NULL);
 
-	function html_template() { return NULL; }
-	function run_command()   { return NULL; }
-	function run_eval()      { return NULL; }
-
 	$output = html_template('<input name="q" value="?" />', [
-			$query
+			$query,
 		]);
 
 	$output = run_command('/my/script.sh ?', [
@@ -313,5 +309,9 @@
 	// $expression in $xpath->query()
 	// $pattern in preg_match()
 	// etc...
+
+	function html_template($html, $parameters) { if (!is_literal($html)) { throw new Exception('Non-literal detected!'); } /* ... */ }
+	function run_command($cmd, $parameters)    { if (!is_literal($cmd))  { throw new Exception('Non-literal detected!'); } /* ... */ }
+	function run_eval($php, $parameters)       { if (!is_literal($php))  { throw new Exception('Non-literal detected!'); } /* ... */ }
 
 ?>
