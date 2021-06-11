@@ -227,6 +227,68 @@
 	echo "\n--------------------------------------------------\n\n";
 
 //--------------------------------------------------
+// Or a different approach, using a Query Builder,
+// and named parameters.
+
+	class query_builder {
+		private $sql = '';
+		private $parameters = [];
+		public function add_sql($sql) {
+			if (!is_literal($sql)) {
+				throw new Exception('Non-literal detected!');
+			}
+			$this->sql .= $sql;
+		}
+		public function add_field($name) {
+			if (!preg_match('/^[a-z0-9_]+$/', $name)) {
+				throw new Exception('Invalid field name "' . $name . '"');
+			}
+			$this->sql .= $name;
+		}
+		public function add_parameter($name, $value) {
+			if (!preg_match('/^[a-z0-9_]+$/', $name)) {
+				throw new Exception('Invalid parameter name "' . $name . '"');
+			}
+			$this->parameters[$name] = $value;
+			$this->sql .= ':' . $name;
+		}
+		public function get_sql() {
+			return $this->sql; // Does not return a literal, but all the inputs have been checked in the appropriate way.
+		}
+		public function get_parameters() {
+			return $this->parameters;
+		}
+	}
+
+
+
+	$post = [
+			sprintf('my_field') => [ // Using sprintf() so none of these are marked as literals (similar to the data Drupal can receive)
+				sprintf('arg_0') => rand(1, 10),
+				sprintf('arg_1') => rand(1, 10),
+				sprintf('arg_2') => rand(1, 10),
+			],
+		];
+
+	$qb = new query_builder();
+	foreach ($post as $field => $values) {
+		$qb->add_field($field);
+		$qb->add_sql(' IN (');
+		$k = 0;
+		foreach ($values as $name => $value) {
+			if (++$k > 1) {
+				$qb->add_sql(', ');
+			}
+			$qb->add_parameter($name, $value);
+		}
+		$qb->add_sql(')');
+	}
+
+	var_dump($qb->get_sql(), $qb->get_parameters());
+
+	echo "\n--------------------------------------------------\n\n";
+
+//--------------------------------------------------
 // Use in other contexts
 
 	$query = ($_GET['q'] ?? NULL);
