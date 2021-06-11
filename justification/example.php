@@ -227,8 +227,7 @@
 	echo "\n--------------------------------------------------\n\n";
 
 //--------------------------------------------------
-// Or a different approach, using a Query Builder,
-// and named parameters.
+// Or a Query Builder, with named parameters
 
 	class query_builder {
 		private $sql = '';
@@ -262,16 +261,20 @@
 
 
 
-	$post = [
-			sprintf('my_field') => [ // Using sprintf() so none of these are marked as literals (similar to the data Drupal can receive)
+	$qb = new query_builder();
+	$qb->add_sql('SELECT * FROM table WHERE ');
+
+
+
+	$conditions = [ // Using sprintf() so none of these are marked as literals (similar to the data Drupal can work with)
+			sprintf('field_2') => [
 				sprintf('arg_0') => rand(1, 10),
 				sprintf('arg_1') => rand(1, 10),
 				sprintf('arg_2') => rand(1, 10),
 			],
 		];
 
-	$qb = new query_builder();
-	foreach ($post as $field => $values) {
+	foreach ($conditions as $field => $values) {
 		$qb->add_field($field);
 		$qb->add_sql(' IN (');
 		$k = 0;
