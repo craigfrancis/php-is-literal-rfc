@@ -7,8 +7,8 @@
 
 		private $pdo = NULL;
 		protected $protection_level = 1;
-			// 1 = Just warnings
-			// 2 = Exceptions, if you want to be absolutely sure.
+			// 1 = Just warnings, the default.
+			// 2 = Exceptions, for anyone who wants to be absolutely sure.
 
 		function literal_check($var) {
 			if (!function_exists('is_literal') || is_literal($var)) {
