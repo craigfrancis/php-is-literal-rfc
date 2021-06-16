@@ -386,7 +386,7 @@ None known
 
 ===== Future Scope =====
 
-1) As noted by someniatko, having a dedicated type would be useful in the future, as "it would serve clearer intent", which can be used by IDEs, Static Analysis, etc. It was agreed to do via a separate RFC as it leads into the next point...
+1) As noted by someniatko and Matthew Brown, having a dedicated type would be useful in the future, as "it would serve clearer intent", which can be used by IDEs, Static Analysis, etc. It was agreed to do via a separate RFC as it leads into the next point...
 
 2) As noted by MarkR, the biggest benefit will come when this flag can be used by PDO and similar functions (//mysqli_query//, //preg_match//, //exec//, etc).
 
