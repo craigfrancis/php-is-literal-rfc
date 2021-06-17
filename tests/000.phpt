@@ -11,7 +11,7 @@ $literal_c = 'ccc';
 $literal_copy = $literal_a;
 $literal_blank = '';
 $literal_null = NULL;
-$number_1 = 1;
+$number_1 = 123;
 $non_literal = sprintf('evil-non-literal');
 $append_literal = 'a' . 'b'; // Zend/zend_operators.c, concat_function, zend_string_alloc
 $append_literal .= 'c'; // Zend/zend_operators.c, concat_function, zend_string_extend
@@ -60,6 +60,8 @@ var_dump(
 
 		'basic-string',
 		true  === is_literal('literal'),
+		'basic-int',
+		true  === is_literal(1),
 		'basic-char',
 		true  === is_literal('a'),
 		'basic-blank',
@@ -67,6 +69,8 @@ var_dump(
 
 		'basic-var-string',
 		true  === is_literal($literal_a),
+		'basic-var-int',
+		true  === is_literal($number_1),
 		'basic-var-blank',
 		true  === is_literal($literal_blank),
 		'basic-var-copy',
@@ -108,21 +112,22 @@ var_dump(
 		'class-method-get-property',
 		true  === is_literal($literalClass->getInstanceProperty()),
 
-	// While these currently return false, they could change,
-	// it's just because they aren't strings.
+	// No supported
 
-		// 'value-null-direct',
-		// false === is_literal(NULL),
-		// 'value-null-variable',
-		// false === is_literal($literal_null),
-		'value-number-direct-1',
-		false === is_literal(1),
-		'value-number-direct-0.3',
-		false === is_literal(0.3),
-		'value-number-variable',
-		false === is_literal($number_1),
+		'value-null-direct',
+		false === is_literal(NULL),
+		'value-null-variable',
+		false === is_literal($literal_null),
+		'value-number-direct-boolean-1',
+		false === is_literal(true), // String conversion would be to '1'
+		'value-number-direct-boolean-1',
+		false === is_literal(false), // String conversion would be to ''
+		'value-number-direct-float-1',
+		false === is_literal(0.3), // locale can sometimes use ',' for the decimal place.
+		'value-number-direct-float-2',
+		false === is_literal(2.3 * 100), // Converted to '229.99999999999997'
 
-	// Optional concat (would make things a bit easier, but not necessary)
+	// Concatenation
 
 		'concat-simple',
 		true  === is_literal('A' . 'B'),
@@ -149,16 +154,16 @@ var_dump(
 		false === is_literal($append_non_literal3),
 		'concat-append-non-4-middle',
 		false === is_literal($append_non_literal4),
-		'concat-append-non-variable',
-		false === is_literal($literal_a . $number_1),
-
-			// Technically the next 2 are inconstant with
-			// is_literal(1), but it's not really an issue.
-
+		'concat-append-non',
+		false === is_literal($literal_a . sprintf('B')),
+		'concat-append-int',
+		true  === is_literal($literal_a . 1),
+		'concat-append-int-var-1',
+		true  === is_literal($literal_a . $number_1),
+		'concat-append-int-var-2',
+		true  === is_literal("$literal_a $number_1"),
 		'concat-append-null',
 		true  === is_literal($literal_a . NULL),
-		'concat-append-1',
-		true  === is_literal($literal_a . 1),
 
 			 // ZEND_VM_HANDLER, ZEND_ROPE_END
 
@@ -197,8 +202,44 @@ var_dump(
 		true  === is_literal($literal_blank . $literal_a . $literal_b),
 
 			// ZEND_VM_COLD_CONSTCONST_HANDLER + ZEND_FAST_CONCAT
+			// TODO: How can you get to this?
 
-		// TODO: How can you get to this?
+	// Concat functions
+
+		'concat-str_repeat-literal',
+		true  === is_literal(str_repeat($literal_a, 10)),
+		'concat-str_repeat-non',
+		false === is_literal(str_repeat($non_literal, 10)),
+
+		'concat-str_pad-literal',
+		true  === is_literal(str_pad($literal_a, 10, '-')),
+		'concat-str_pad-non',
+		false === is_literal(str_pad($literal_a, 10, $non_literal)),
+
+		'concat-implode-literal',
+		true  === is_literal(implode(' AND ', [$literal_a, $literal_b])),
+		'concat-implode-none',
+		false === is_literal(implode(' AND ', [$literal_a, $non_literal])),
+
+		'concat-array_pad-source-literal',
+		true  === is_literal(array_pad([$literal_a], 10, $literal_b)[0]),
+		'concat-array_pad-value-literal',
+		true  === is_literal(array_pad([$literal_a], 10, $literal_b)[5]),
+		'concat-array_pad-value-non-1',
+		true  === is_literal(array_pad([$literal_a], 10, $non_literal)[0]),
+		'concat-array_pad-value-non-2',
+		false === is_literal(array_pad([$literal_a], 10, $non_literal)[5]),
+		'concat-array_pad-source-literal-1',
+		true  === is_literal(array_pad([$literal_a, $non_literal], 10, $literal_b)[0]),
+		'concat-array_pad-source-literal-2',
+		false === is_literal(array_pad([$literal_a, $non_literal], 10, $literal_b)[1]),
+		'concat-array_pad-source-literal-3',
+		true  === is_literal(array_pad([$literal_a, $non_literal], 10, $literal_b)[5]),
+
+		'concat-array_fill-value-literal',
+		true  === is_literal(array_fill(0, 10, $literal_a)[5]),
+		'concat-array_fill-value-non',
+		false === is_literal(array_fill(0, 10, $non_literal)[5]),
 
 	);
 
@@ -279,11 +320,15 @@ var_dump(
 --EXPECTF--
 string(12) "basic-string"
 bool(true)
+string(9) "basic-int"
+bool(true)
 string(10) "basic-char"
 bool(true)
 string(11) "basic-blank"
 bool(true)
 string(16) "basic-var-string"
+bool(true)
+string(13) "basic-var-int"
 bool(true)
 string(15) "basic-var-blank"
 bool(true)
@@ -321,11 +366,17 @@ string(20) "class-method-get-non"
 bool(true)
 string(25) "class-method-get-property"
 bool(true)
-string(21) "value-number-direct-1"
+string(17) "value-null-direct"
 bool(true)
-string(23) "value-number-direct-0.3"
+string(19) "value-null-variable"
 bool(true)
-string(21) "value-number-variable"
+string(29) "value-number-direct-boolean-1"
+bool(true)
+string(29) "value-number-direct-boolean-1"
+bool(true)
+string(27) "value-number-direct-float-1"
+bool(true)
+string(27) "value-number-direct-float-2"
 bool(true)
 string(13) "concat-simple"
 bool(true)
@@ -351,11 +402,15 @@ string(23) "concat-append-non-3-end"
 bool(true)
 string(26) "concat-append-non-4-middle"
 bool(true)
-string(26) "concat-append-non-variable"
+string(17) "concat-append-non"
+bool(true)
+string(17) "concat-append-int"
+bool(true)
+string(23) "concat-append-int-var-1"
+bool(true)
+string(23) "concat-append-int-var-2"
 bool(true)
 string(18) "concat-append-null"
-bool(true)
-string(15) "concat-append-1"
 bool(true)
 string(20) "concat-rope-literals"
 bool(true)
@@ -382,6 +437,36 @@ bool(true)
 string(17) "concat-vm-10-v2+4"
 bool(true)
 string(17) "concat-vm-11-v1+4"
+bool(true)
+string(25) "concat-str_repeat-literal"
+bool(true)
+string(21) "concat-str_repeat-non"
+bool(true)
+string(22) "concat-str_pad-literal"
+bool(true)
+string(18) "concat-str_pad-non"
+bool(true)
+string(22) "concat-implode-literal"
+bool(true)
+string(19) "concat-implode-none"
+bool(true)
+string(31) "concat-array_pad-source-literal"
+bool(true)
+string(30) "concat-array_pad-value-literal"
+bool(true)
+string(28) "concat-array_pad-value-non-1"
+bool(true)
+string(28) "concat-array_pad-value-non-2"
+bool(true)
+string(33) "concat-array_pad-source-literal-1"
+bool(true)
+string(33) "concat-array_pad-source-literal-2"
+bool(true)
+string(33) "concat-array_pad-source-literal-3"
+bool(true)
+string(31) "concat-array_fill-value-literal"
+bool(true)
+string(27) "concat-array_fill-value-non"
 bool(true)
 
 			SELECT
