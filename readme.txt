@@ -63,6 +63,8 @@ Libraries would be able to use //is_literal()// immediately, allowing them to wa
 
 **RedBean** (Gabor de Mooij): "You can list RedBeanPHP as a supporter, we will implement this into the core."
 
+**Psalm** (Matthew Brown): "I've just added support for a //literal-string// type to Psalm: https://psalm.dev/r/9440908f39"
+
 ===== Proposal =====
 
 Add //is_literal(string $string): bool// to check if a variable contains a string defined in the PHP script.
