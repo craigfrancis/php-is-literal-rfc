@@ -12,30 +12,30 @@ $literal_copy = $literal_a;
 $literal_blank = '';
 $literal_null = NULL;
 $number_1 = 123;
-$non_literal = sprintf('evil-non-literal');
-$append_literal = 'a' . 'b'; // Zend/zend_operators.c, concat_function, zend_string_alloc
-$append_literal .= 'c'; // Zend/zend_operators.c, concat_function, zend_string_extend
-$append_literal .= 'd'; // Zend/zend_operators.c, concat_function, result == op1 && Z_REFCOUNTED_P(result)
-$append_literal .= '';  // Zend/zend_operators.c, concat_function, Z_STRLEN_P(op2) == 0
-$append_non_literal1 = 'a';
-$append_non_literal1 .= 2; // While concat_function will convert to a string, it's not from a string literal (but happy for this to change)
-$append_non_literal2 = sprintf('evil-non-literal');
-$append_non_literal2 .= 'b';
+$non_literal = strtoupper('evil-non-literal');
+$append_literal1 = 'a' . 'b'; // Zend/zend_operators.c, concat_function, zend_string_alloc
+$append_literal1 .= 'c'; // Zend/zend_operators.c, concat_function, zend_string_extend
+$append_literal1 .= 'd'; // Zend/zend_operators.c, concat_function, result == op1 && Z_REFCOUNTED_P(result)
+$append_literal1 .= '';  // Zend/zend_operators.c, concat_function, Z_STRLEN_P(op2) == 0
+$append_literal2 = 'a';
+$append_literal2 .= 2; // Integers are handled a bit differently
+$append_non_literal1 = strtoupper('evil-non-literal');
+$append_non_literal1 .= 'b';
+$append_non_literal2 = 'a';
+$append_non_literal2 .= strtoupper('evil-non-literal');
 $append_non_literal3 = 'a';
-$append_non_literal3 .= sprintf('evil-non-literal');
-$append_non_literal4 = 'a';
-$append_non_literal4 .= sprintf('evil-non-literal');
-$append_non_literal4 .= 'c';
+$append_non_literal3 .= strtoupper('evil-non-literal');
+$append_non_literal3 .= 'c';
 $edit_non_literal1 = 'abc';
 $edit_non_literal1[1] = 'X';
 $edit_non_literal2 = 'a';
 $edit_non_literal2++;
-$array_key = ['literal' => 'a', 'not' => sprintf('evil-non-literal')];
+$array_key = ['literal' => 'a', 'not' => strtoupper('evil-non-literal')];
 $array_int1 = ['a', 'bb'];
-$array_int2 = ['a', sprintf('evil-non-literal')];
+$array_int2 = ['a', strtoupper('evil-non-literal')];
 
 define('CONST_LITERAL', 'a');
-define('CONST_NON_LITERAL', sprintf('evil-non-literal'));
+define('CONST_NON_LITERAL', strtoupper('evil-non-literal'));
 
 class LiteralClass {
 	const CLASS_CONST              = 'Const';
@@ -45,7 +45,7 @@ class LiteralClass {
 		return 'A';
 	}
 	public function getNonLiteral() {
-		return sprintf('evil-non-literal');
+		return strtoupper('evil-non-literal');
 	}
 	public function getInstanceProperty() {
 		return $this->instance_property;
@@ -66,6 +66,8 @@ var_dump(
 		true  === is_literal('a'),
 		'basic-blank',
 		true  === is_literal(''),
+		'basic-null',
+		false === is_literal(NULL),
 
 		'basic-var-string',
 		true  === is_literal($literal_a),
@@ -142,20 +144,20 @@ var_dump(
 		'concat-inline3-variable',
 		true  === is_literal('A' . ' B ' . ' C ' . $literal_a),
 		'concat-inline-non',
-		false === is_literal('A' . sprintf('B')),
+		false === is_literal('A' . strtoupper('evil-non-literal')),
 
-		'concat-append-literal',
-		true  === is_literal($append_literal),
-		'concat-append-non-1-number',
+		'concat-append-literal-1',
+		true  === is_literal($append_literal1),
+		'concat-append-literal-2',
+		true  === is_literal($append_literal2),
+		'concat-append-non-1-start',
 		false === is_literal($append_non_literal1),
-		'concat-append-non-2-start',
+		'concat-append-non-2-end',
 		false === is_literal($append_non_literal2),
-		'concat-append-non-3-end',
+		'concat-append-non-3-middle',
 		false === is_literal($append_non_literal3),
-		'concat-append-non-4-middle',
-		false === is_literal($append_non_literal4),
 		'concat-append-non',
-		false === is_literal($literal_a . sprintf('B')),
+		false === is_literal($literal_a . strtoupper('evil-non-literal')),
 		'concat-append-int',
 		true  === is_literal($literal_a . 1),
 		'concat-append-int-var-1',
@@ -240,6 +242,15 @@ var_dump(
 		true  === is_literal(array_fill(0, 10, $literal_a)[5]),
 		'concat-array_fill-value-non',
 		false === is_literal(array_fill(0, 10, $non_literal)[5]),
+
+		'sprintf-basic-literal-1',
+		true  === is_literal(sprintf('test')),
+		'sprintf-basic-literal-2',
+		true  === is_literal(sprintf('test %d', $number_1)),
+		'sprintf-basic-literal-3',
+		true  === is_literal(sprintf('test %s', $literal_a)),
+		'sprintf-basic-non-1',
+		false === is_literal(sprintf('test %s', $non_literal)),
 
 	);
 
@@ -326,6 +337,8 @@ string(10) "basic-char"
 bool(true)
 string(11) "basic-blank"
 bool(true)
+string(10) "basic-null"
+bool(true)
 string(16) "basic-var-string"
 bool(true)
 string(13) "basic-var-int"
@@ -392,15 +405,15 @@ string(23) "concat-inline3-variable"
 bool(true)
 string(17) "concat-inline-non"
 bool(true)
-string(21) "concat-append-literal"
+string(23) "concat-append-literal-1"
 bool(true)
-string(26) "concat-append-non-1-number"
+string(23) "concat-append-literal-2"
 bool(true)
-string(25) "concat-append-non-2-start"
+string(25) "concat-append-non-1-start"
 bool(true)
-string(23) "concat-append-non-3-end"
+string(23) "concat-append-non-2-end"
 bool(true)
-string(26) "concat-append-non-4-middle"
+string(26) "concat-append-non-3-middle"
 bool(true)
 string(17) "concat-append-non"
 bool(true)
@@ -467,6 +480,14 @@ bool(true)
 string(31) "concat-array_fill-value-literal"
 bool(true)
 string(27) "concat-array_fill-value-non"
+bool(true)
+string(23) "sprintf-basic-literal-1"
+bool(true)
+string(23) "sprintf-basic-literal-2"
+bool(true)
+string(23) "sprintf-basic-literal-3"
+bool(true)
+string(19) "sprintf-basic-non-1"
 bool(true)
 
 			SELECT
