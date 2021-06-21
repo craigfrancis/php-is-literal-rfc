@@ -1,5 +1,5 @@
 --TEST--
-Test is_literal() function
+Test is_trusted() function
 --FILE--
 <?php
 
@@ -59,120 +59,120 @@ var_dump(
 	// Basic values
 
 		'basic-string',
-		true  === is_literal('literal'),
+		true  === is_trusted('literal'),
 		'basic-int',
-		true  === is_literal(1),
+		true  === is_trusted(1),
 		'basic-char',
-		true  === is_literal('a'),
+		true  === is_trusted('a'),
 		'basic-blank',
-		true  === is_literal(''),
+		true  === is_trusted(''),
 		'basic-null',
-		false === is_literal(NULL),
+		false === is_trusted(NULL),
 
 		'basic-var-string',
-		true  === is_literal($literal_a),
+		true  === is_trusted($literal_a),
 		'basic-var-int',
-		true  === is_literal($number_1),
+		true  === is_trusted($number_1),
 		'basic-var-blank',
-		true  === is_literal($literal_blank),
+		true  === is_trusted($literal_blank),
 		'basic-var-copy',
-		true  === is_literal($literal_copy),
+		true  === is_trusted($literal_copy),
 
 		'basic-array-str-key-literal',
-		true  === is_literal($array_key['literal']),
+		true  === is_trusted($array_key['literal']),
 		'basic-array-str-key-non',
-		false === is_literal($array_key['not']),
+		false === is_trusted($array_key['not']),
 		'basic-array-int1-key-literal-char',
-		true  === is_literal($array_int1[0]),
+		true  === is_trusted($array_int1[0]),
 		'basic-array-int1-key-literal-sting',
-		true  === is_literal($array_int1[1]),
+		true  === is_trusted($array_int1[1]),
 		'basic-array-int2-key-literal',
-		true  === is_literal($array_int2[0]),
+		true  === is_trusted($array_int2[0]),
 		'basic-array-int2-key-non',
-		false === is_literal($array_int2[1]),
+		false === is_trusted($array_int2[1]),
 
 		'basic-string-edit-char',
-		false === is_literal($edit_non_literal1),
+		false === is_trusted($edit_non_literal1),
 		'basic-string-edit-increment',
-		false === is_literal($edit_non_literal2),
+		false === is_trusted($edit_non_literal2),
 
 		'basic-function-output-non',
-		false === is_literal($non_literal), // No output from any function can be trusted.
+		false === is_trusted($non_literal), // No output from any function can be trusted.
 		'basic-function-const-literal',
-		true  === is_literal(CONST_LITERAL),
+		true  === is_trusted(CONST_LITERAL),
 		'basic-function-const-non',
-		false === is_literal(CONST_NON_LITERAL),
+		false === is_trusted(CONST_NON_LITERAL),
 
 		'class-const',
-		true  === is_literal(LiteralClass::CLASS_CONST),
+		true  === is_trusted(LiteralClass::CLASS_CONST),
 		'class-property-static',
-		true  === is_literal(LiteralClass::$static_property),
+		true  === is_trusted(LiteralClass::$static_property),
 		'class-method-get-literal',
-		true  === is_literal($literalClass->getLiteral()),
+		true  === is_trusted($literalClass->getLiteral()),
 		'class-method-get-non',
-		false === is_literal($literalClass->getNonLiteral()),
+		false === is_trusted($literalClass->getNonLiteral()),
 		'class-method-get-property',
-		true  === is_literal($literalClass->getInstanceProperty()),
+		true  === is_trusted($literalClass->getInstanceProperty()),
 
 	// No supported
 
 		'value-null-direct',
-		false === is_literal(NULL),
+		false === is_trusted(NULL),
 		'value-null-variable',
-		false === is_literal($literal_null),
+		false === is_trusted($literal_null),
 		'value-number-direct-boolean-1',
-		false === is_literal(true), // String conversion would be to '1'
+		false === is_trusted(true), // String conversion would be to '1'
 		'value-number-direct-boolean-1',
-		false === is_literal(false), // String conversion would be to ''
+		false === is_trusted(false), // String conversion would be to ''
 		'value-number-direct-float-1',
-		false === is_literal(0.3), // locale can sometimes use ',' for the decimal place.
+		false === is_trusted(0.3), // locale can sometimes use ',' for the decimal place.
 		'value-number-direct-float-2',
-		false === is_literal(2.3 * 100), // Converted to '229.99999999999997'
+		false === is_trusted(2.3 * 100), // Converted to '229.99999999999997'
 
 	// Concatenation
 
 		'concat-simple',
-		true  === is_literal('A' . 'B'),
+		true  === is_trusted('A' . 'B'),
 		'concat-variables-1',
-		true  === is_literal($literal_a . $literal_b),
+		true  === is_trusted($literal_a . $literal_b),
 		'concat-variables-2',
-		true  === is_literal($literal_a . '' . $literal_b),
+		true  === is_trusted($literal_a . '' . $literal_b),
 		'concat-variable-inline',
-		true  === is_literal($literal_a . 'B'),
+		true  === is_trusted($literal_a . 'B'),
 		'concat-inline-variable',
-		true  === is_literal('A' . $literal_b),
+		true  === is_trusted('A' . $literal_b),
 		'concat-inline3-variable',
-		true  === is_literal('A' . ' B ' . ' C ' . $literal_a),
+		true  === is_trusted('A' . ' B ' . ' C ' . $literal_a),
 		'concat-inline-non',
-		false === is_literal('A' . strtoupper('evil-non-literal')),
+		false === is_trusted('A' . strtoupper('evil-non-literal')),
 
 		'concat-append-literal-1',
-		true  === is_literal($append_literal1),
+		true  === is_trusted($append_literal1),
 		'concat-append-literal-2',
-		true  === is_literal($append_literal2),
+		true  === is_trusted($append_literal2),
 		'concat-append-non-1-start',
-		false === is_literal($append_non_literal1),
+		false === is_trusted($append_non_literal1),
 		'concat-append-non-2-end',
-		false === is_literal($append_non_literal2),
+		false === is_trusted($append_non_literal2),
 		'concat-append-non-3-middle',
-		false === is_literal($append_non_literal3),
+		false === is_trusted($append_non_literal3),
 		'concat-append-non',
-		false === is_literal($literal_a . strtoupper('evil-non-literal')),
+		false === is_trusted($literal_a . strtoupper('evil-non-literal')),
 		'concat-append-int',
-		true  === is_literal($literal_a . 1),
+		true  === is_trusted($literal_a . 1),
 		'concat-append-int-var-1',
-		true  === is_literal($literal_a . $number_1),
+		true  === is_trusted($literal_a . $number_1),
 		'concat-append-int-var-2',
-		true  === is_literal("$literal_a $number_1"),
+		true  === is_trusted("$literal_a $number_1"),
 		'concat-append-null',
-		true  === is_literal($literal_a . NULL),
+		true  === is_trusted($literal_a . NULL),
 
 			 // ZEND_VM_HANDLER, ZEND_ROPE_END
 
 		'concat-rope-literals',
-		true  === is_literal("{$literal_a} {$literal_b} {$literal_c}"),
+		true  === is_trusted("{$literal_a} {$literal_b} {$literal_c}"),
 		'concat-rope-non',
-		false === is_literal("{$literal_a} {$non_literal} {$literal_b}"),
+		false === is_trusted("{$literal_a} {$non_literal} {$literal_b}"),
 
 			// ZEND_VM_HANDLER + ZEND_CONCAT
 			// - v1 = op1 len 0
@@ -181,27 +181,27 @@ var_dump(
 			// - v4 = normal concat
 
 		'concat-vm-1-v1',
-		true  === is_literal($literal_blank . $literal_a),
+		true  === is_trusted($literal_blank . $literal_a),
 		'concat-vm-2-v1',
-		false === is_literal($literal_blank . $non_literal),
+		false === is_trusted($literal_blank . $non_literal),
 		'concat-vm-3-v2',
-		true  === is_literal($literal_a . $literal_blank),
+		true  === is_trusted($literal_a . $literal_blank),
 		'concat-vm-4-v2',
-		false === is_literal($non_literal . $literal_blank),
+		false === is_trusted($non_literal . $literal_blank),
 		'concat-vm-5-v4',
-		true  === is_literal($literal_a . $literal_b),
+		true  === is_trusted($literal_a . $literal_b),
 		'concat-vm-6-v4+3',
-		false === is_literal($literal_a . $literal_b . $non_literal),
+		false === is_trusted($literal_a . $literal_b . $non_literal),
 		'concat-vm-7-v4+3',
-		true  === is_literal($literal_a . $literal_b . $literal_c),
+		true  === is_trusted($literal_a . $literal_b . $literal_c),
 		'concat-vm-8-v4+3',
-		false === is_literal($literal_a . $non_literal . $literal_b),
+		false === is_trusted($literal_a . $non_literal . $literal_b),
 		'concat-vm-9-v4+2',
-		true  === is_literal($literal_a . $literal_b . $literal_blank),
+		true  === is_trusted($literal_a . $literal_b . $literal_blank),
 		'concat-vm-10-v2+4',
-		true  === is_literal($literal_a . $literal_blank . $literal_b),
+		true  === is_trusted($literal_a . $literal_blank . $literal_b),
 		'concat-vm-11-v1+4',
-		true  === is_literal($literal_blank . $literal_a . $literal_b),
+		true  === is_trusted($literal_blank . $literal_a . $literal_b),
 
 			// ZEND_VM_COLD_CONSTCONST_HANDLER + ZEND_FAST_CONCAT
 			// TODO: How can you get to this?
@@ -209,48 +209,48 @@ var_dump(
 	// Concat functions
 
 		'concat-str_repeat-literal',
-		true  === is_literal(str_repeat($literal_a, 10)),
+		true  === is_trusted(str_repeat($literal_a, 10)),
 		'concat-str_repeat-non',
-		false === is_literal(str_repeat($non_literal, 10)),
+		false === is_trusted(str_repeat($non_literal, 10)),
 
 		'concat-str_pad-literal',
-		true  === is_literal(str_pad($literal_a, 10, '-')),
+		true  === is_trusted(str_pad($literal_a, 10, '-')),
 		'concat-str_pad-non',
-		false === is_literal(str_pad($literal_a, 10, $non_literal)),
+		false === is_trusted(str_pad($literal_a, 10, $non_literal)),
 
 		'concat-implode-literal',
-		true  === is_literal(implode(' AND ', [$literal_a, $literal_b])),
+		true  === is_trusted(implode(' AND ', [$literal_a, $literal_b])),
 		'concat-implode-none',
-		false === is_literal(implode(' AND ', [$literal_a, $non_literal])),
+		false === is_trusted(implode(' AND ', [$literal_a, $non_literal])),
 
 		'concat-array_pad-source-literal',
-		true  === is_literal(array_pad([$literal_a], 10, $literal_b)[0]),
+		true  === is_trusted(array_pad([$literal_a], 10, $literal_b)[0]),
 		'concat-array_pad-value-literal',
-		true  === is_literal(array_pad([$literal_a], 10, $literal_b)[5]),
+		true  === is_trusted(array_pad([$literal_a], 10, $literal_b)[5]),
 		'concat-array_pad-value-non-1',
-		true  === is_literal(array_pad([$literal_a], 10, $non_literal)[0]),
+		true  === is_trusted(array_pad([$literal_a], 10, $non_literal)[0]),
 		'concat-array_pad-value-non-2',
-		false === is_literal(array_pad([$literal_a], 10, $non_literal)[5]),
+		false === is_trusted(array_pad([$literal_a], 10, $non_literal)[5]),
 		'concat-array_pad-source-literal-1',
-		true  === is_literal(array_pad([$literal_a, $non_literal], 10, $literal_b)[0]),
+		true  === is_trusted(array_pad([$literal_a, $non_literal], 10, $literal_b)[0]),
 		'concat-array_pad-source-literal-2',
-		false === is_literal(array_pad([$literal_a, $non_literal], 10, $literal_b)[1]),
+		false === is_trusted(array_pad([$literal_a, $non_literal], 10, $literal_b)[1]),
 		'concat-array_pad-source-literal-3',
-		true  === is_literal(array_pad([$literal_a, $non_literal], 10, $literal_b)[5]),
+		true  === is_trusted(array_pad([$literal_a, $non_literal], 10, $literal_b)[5]),
 
 		'concat-array_fill-value-literal',
-		true  === is_literal(array_fill(0, 10, $literal_a)[5]),
+		true  === is_trusted(array_fill(0, 10, $literal_a)[5]),
 		'concat-array_fill-value-non',
-		false === is_literal(array_fill(0, 10, $non_literal)[5]),
+		false === is_trusted(array_fill(0, 10, $non_literal)[5]),
 
 		'sprintf-basic-literal-1',
-		true  === is_literal(sprintf('test')),
+		true  === is_trusted(sprintf('test')),
 		'sprintf-basic-literal-2',
-		true  === is_literal(sprintf('test %d', $number_1)),
+		true  === is_trusted(sprintf('test %d', $number_1)),
 		'sprintf-basic-literal-3',
-		true  === is_literal(sprintf('test %s', $literal_a)),
+		true  === is_trusted(sprintf('test %s', $literal_a)),
 		'sprintf-basic-non-1',
-		false === is_literal(sprintf('test %s', $non_literal)),
+		false === is_trusted(sprintf('test %s', $non_literal)),
 
 	);
 
@@ -321,10 +321,10 @@ var_dump(
 		echo $sql . "\n\n";
 
 		var_dump(
-				is_literal($sql),
-				is_literal($in_sql),
-				is_literal($where_sql),
-				is_literal($order_sql),
+				is_trusted($sql),
+				is_trusted($in_sql),
+				is_trusted($where_sql),
+				is_trusted($order_sql),
 			);
 
 ?>

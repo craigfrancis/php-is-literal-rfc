@@ -10,17 +10,17 @@
 			// 1 = Just warnings, the default.
 			// 2 = Exceptions, for anyone who wants to be absolutely sure.
 
-		function literal_check($var) {
-			if (!function_exists('is_literal') || is_literal($var)) {
+		function trusted_check($var) {
+			if (!function_exists('is_trusted') || is_trusted($var)) {
 				// Fine - This is a programmer defined string (bingo), or not using PHP 8.1
 			} else if ($var instanceof unsafe_value) {
 				// Fine - Not ideal, but at least they know this one is unsafe.
 			} else if ($this->protection_level === 0) {
 				// Fine - Programmer aware, and is choosing to disable this check everywhere.
 			} else if ($this->protection_level === 1) {
-				trigger_error('Non-literal detected!', E_USER_WARNING);
+				trigger_error('Non-trusted value detected!', E_USER_WARNING);
 			} else {
-				throw new Exception('Non-literal detected!');
+				throw new Exception('Non-trusted value detected!');
 			}
 		}
 		function enforce_injection_protection() {
@@ -31,7 +31,7 @@
 		}
 
 		function where($sql, $parameters = []) {
-			$this->literal_check($sql); // Used any time an argument should be checked.
+			$this->trusted_check($sql); // Used any time an argument should be checked.
 			// ...
 		}
 
@@ -41,7 +41,7 @@
 				// $this->pdo = new PDO('mysql:dbname=...;host=...', '...', '...', [PDO::ATTR_EMULATE_PREPARES => false]);
 			}
 
-			$this->literal_check($sql);
+			$this->trusted_check($sql);
 
 			foreach ($aliases as $name => $value) {
 				if (!preg_match('/^[a-z0-9_]+$/', $name)) {
@@ -85,7 +85,7 @@
 // Normal use:
 
 
-	$id = sprintf('1'); // Using sprintf() so it's not marked as a literal, e.g. $_GET['id']
+	$id = trim(' 1 '); // Using trim() so it's not marked as trusted, e.g. $_GET['id']
 
 	var_dump($db->query('SELECT name FROM user WHERE id = ?', [$id]));
 
@@ -185,7 +185,7 @@
 
 
 
-	var_dump(is_literal($sql), $sql, $parameters);
+	var_dump(is_trusted($sql), $sql, $parameters);
 
 	var_dump($db->query($sql, $parameters));
 
@@ -199,10 +199,10 @@
 	$parameters = [];
 
 	$aliases = [
-			'with_1'  => sprintf('w1'), // Using sprintf() so it's not marked as a literal.
-			'table_1' => sprintf('user'),
-			'field_1' => sprintf('email'),
-			'field_2' => sprintf('dob'), // ... All of these are user defined fields.
+			'with_1'  => trim(' w1 '), // Using trim() so it's not marked as trusted.
+			'table_1' => trim(' user '),
+			'field_1' => trim(' email '),
+			'field_2' => trim(' dob '), // ... All of these are user defined fields.
 		];
 
 	$with_sql = '{with_1} AS (SELECT id, name, type, {field_1} as f1, deleted FROM {table_1})';
@@ -233,8 +233,8 @@
 		private $sql = '';
 		private $parameters = [];
 		public function add_sql($sql) {
-			if (!is_literal($sql)) {
-				throw new Exception('Non-literal detected!');
+			if (!is_trusted($sql)) {
+				throw new Exception('Non-trusted value detected!');
 			}
 			$this->sql .= $sql;
 		}
@@ -252,7 +252,7 @@
 			$this->sql .= ':' . $name;
 		}
 		public function get_sql() {
-			return $this->sql; // Does not return a literal, but all the inputs have been checked in the appropriate way.
+			return $this->sql; // Does not return a trusted value, but all the inputs have been checked in the appropriate way.
 		}
 		public function get_parameters() {
 			return $this->parameters;
@@ -266,11 +266,11 @@
 
 
 
-	$conditions = [ // Using sprintf() so none of these are marked as literals (similar to the data Drupal can work with)
-			sprintf('field_2') => [
-				sprintf('arg_0') => rand(1, 10),
-				sprintf('arg_1') => rand(1, 10),
-				sprintf('arg_2') => rand(1, 10),
+	$conditions = [ // Using trim() so none of these are marked as trusted (similar to the data Drupal can work with)
+			trim(' field_2 ') => [
+				trim(' arg_0 ') => rand(1, 10),
+				trim(' arg_1 ') => rand(1, 10),
+				trim(' arg_2 ') => rand(1, 10),
 			],
 		];
 
@@ -313,8 +313,8 @@
 	// $pattern in preg_match()
 	// etc...
 
-	function html_template($html, $parameters) { if (!is_literal($html)) { throw new Exception('Non-literal detected!'); } /* ... */ }
-	function run_command($cmd, $parameters)    { if (!is_literal($cmd))  { throw new Exception('Non-literal detected!'); } /* ... */ }
-	function run_eval($php, $parameters)       { if (!is_literal($php))  { throw new Exception('Non-literal detected!'); } /* ... */ }
+	function html_template($html, $parameters) { if (!is_trusted($html)) { throw new Exception('Non-trusted value detected!'); } /* ... */ }
+	function run_command($cmd, $parameters)    { if (!is_trusted($cmd))  { throw new Exception('Non-trusted value detected!'); } /* ... */ }
+	function run_eval($php, $parameters)       { if (!is_trusted($php))  { throw new Exception('Non-trusted value detected!'); } /* ... */ }
 
 ?>

@@ -2,8 +2,8 @@
 
 function parameterised_exec($cmd, $args = []) {
 
-  if (!is_literal($cmd)) {
-    throw new Exception('The first argument must be a literal');
+  if (!is_trusted($cmd)) {
+    throw new Exception('The first argument must be trusted');
   }
 
   $offset = 0;

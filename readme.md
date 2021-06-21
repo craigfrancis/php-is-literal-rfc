@@ -110,7 +110,7 @@ example(strtoupper($a)); // Exception thrown.
 
 ## Try it
 
-[Have a play with it on 3v4l.org](https://3v4l.org/#focus=rfc.literals) - Note, the function has not yet been re-named and is still `is_literal()`, but all current functionality is the same.
+[Have a play with it on 3v4l.org](https://3v4l.org/#focus=rfc.literals)
 
 [How it can be used by libraries](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/example.php?ts=4) - Notice how this example library just raises a warning, to simply let the developer know about the issue, **without breaking anything**. And it provides an `"unsafe_value"` value-object to bypass the `is_trusted()` check, but none of the examples need to use it (can be useful as a temporary thing, but there are much safer/better solutions, which developers are/should already be using).
 

@@ -73,7 +73,7 @@
 				//--------------------------------------------------
 				// Template HTML
 
-					if (!is_literal($template_html)) {
+					if (!is_trusted($template_html)) {
 						throw new Exception('Invalid Template HTML.');
 					}
 
