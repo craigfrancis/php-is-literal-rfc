@@ -10,17 +10,17 @@
 			// 1 = Just warnings, the default.
 			// 2 = Exceptions, for anyone who wants to be absolutely sure.
 
-		function trusted_check($var) {
-			if (!function_exists('is_trusted') || is_trusted($var)) {
+		function noble_check($var) {
+			if (!function_exists('is_noble') || is_noble($var)) {
 				// Fine - This is a programmer defined string (bingo), or not using PHP 8.1
 			} else if ($var instanceof unsafe_value) {
 				// Fine - Not ideal, but at least they know this one is unsafe.
 			} else if ($this->protection_level === 0) {
 				// Fine - Programmer aware, and is choosing to disable this check everywhere.
 			} else if ($this->protection_level === 1) {
-				trigger_error('Non-trusted value detected!', E_USER_WARNING);
+				trigger_error('Non-noble value detected!', E_USER_WARNING);
 			} else {
-				throw new Exception('Non-trusted value detected!');
+				throw new Exception('Non-noble value detected!');
 			}
 		}
 		function enforce_injection_protection() {
@@ -31,7 +31,7 @@
 		}
 
 		function where($sql, $parameters = []) {
-			$this->trusted_check($sql); // Used any time an argument should be checked.
+			$this->noble_check($sql); // Used any time an argument should be checked.
 			// ...
 		}
 
@@ -41,7 +41,7 @@
 				// $this->pdo = new PDO('mysql:dbname=...;host=...', '...', '...', [PDO::ATTR_EMULATE_PREPARES => false]);
 			}
 
-			$this->trusted_check($sql);
+			$this->noble_check($sql);
 
 			foreach ($aliases as $name => $value) {
 				if (!preg_match('/^[a-z0-9_]+$/', $name)) {
@@ -85,7 +85,7 @@
 // Normal use:
 
 
-	$id = trim(' 1 '); // Using trim() so it's not marked as trusted, e.g. $_GET['id']
+	$id = trim(' 1 '); // Using trim() so it's not marked as noble, e.g. $_GET['id']
 
 	var_dump($db->query('SELECT name FROM user WHERE id = ?', [$id]));
 
@@ -185,7 +185,7 @@
 
 
 
-	var_dump(is_trusted($sql), $sql, $parameters);
+	var_dump(is_noble($sql), $sql, $parameters);
 
 	var_dump($db->query($sql, $parameters));
 
@@ -199,7 +199,7 @@
 	$parameters = [];
 
 	$aliases = [
-			'with_1'  => trim(' w1 '), // Using trim() so it's not marked as trusted.
+			'with_1'  => trim(' w1 '), // Using trim() so it's not marked as noble.
 			'table_1' => trim(' user '),
 			'field_1' => trim(' email '),
 			'field_2' => trim(' dob '), // ... All of these are user defined fields.
@@ -233,8 +233,8 @@
 		private $sql = '';
 		private $parameters = [];
 		public function add_sql($sql) {
-			if (!is_trusted($sql)) {
-				throw new Exception('Non-trusted value detected!');
+			if (!is_noble($sql)) {
+				throw new Exception('Non-noble value detected!');
 			}
 			$this->sql .= $sql;
 		}
@@ -252,7 +252,7 @@
 			$this->sql .= ':' . $name;
 		}
 		public function get_sql() {
-			return $this->sql; // Does not return a trusted value, but all the inputs have been checked in the appropriate way.
+			return $this->sql; // Does not return a noble value, but all the inputs have been checked in the appropriate way.
 		}
 		public function get_parameters() {
 			return $this->parameters;
@@ -266,7 +266,7 @@
 
 
 
-	$conditions = [ // Using trim() so none of these are marked as trusted (similar to the data Drupal can work with)
+	$conditions = [ // Using trim() so none of these are marked as noble (similar to the data Drupal can work with)
 			trim(' field_2 ') => [
 				trim(' arg_0 ') => rand(1, 10),
 				trim(' arg_1 ') => rand(1, 10),
@@ -313,8 +313,8 @@
 	// $pattern in preg_match()
 	// etc...
 
-	function html_template($html, $parameters) { if (!is_trusted($html)) { throw new Exception('Non-trusted value detected!'); } /* ... */ }
-	function run_command($cmd, $parameters)    { if (!is_trusted($cmd))  { throw new Exception('Non-trusted value detected!'); } /* ... */ }
-	function run_eval($php, $parameters)       { if (!is_trusted($php))  { throw new Exception('Non-trusted value detected!'); } /* ... */ }
+	function html_template($html, $parameters) { if (!is_noble($html)) { throw new Exception('Non-noble value detected!'); } /* ... */ }
+	function run_command($cmd, $parameters)    { if (!is_noble($cmd))  { throw new Exception('Non-noble value detected!'); } /* ... */ }
+	function run_eval($php, $parameters)       { if (!is_noble($php))  { throw new Exception('Non-noble value detected!'); } /* ... */ }
 
 ?>

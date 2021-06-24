@@ -3,8 +3,8 @@
 //--------------------------------------------------
 
 
-	var_dump(is_trusted('Example')); // true
-	var_dump(is_trusted(strtoupper('Example'))); // false, modified output from a function is not trusted
+	var_dump(is_noble('Example')); // true
+	var_dump(is_noble(strtoupper('Example'))); // false, modified output from a function is not noble
 
 
 //--------------------------------------------------
@@ -15,9 +15,9 @@
 	$a = 'Hello';
 	$b = 'World';
 
-	var_dump(is_trusted($a)); // true
-	var_dump(is_trusted($a . $b)); // true
-	var_dump(is_trusted("Hi $b")); // true
+	var_dump(is_noble($a)); // true
+	var_dump(is_noble($a . $b)); // true
+	var_dump(is_noble("Hi $b")); // true
 
 
 //--------------------------------------------------
@@ -25,13 +25,13 @@
 
 	echo "\n" . 'Values that must be rejected' . "\n";
 
-	$not_trusted = ($_GET['id'] ?? strtoupper('id')); // Using strtoupper so the default isn't a trusted either.
+	$not_noble = ($_GET['id'] ?? strtoupper('id')); // Using strtoupper so the default isn't a noble either.
 
-	var_dump(is_trusted($not_trusted)); // false
-	var_dump(is_trusted(sprintf('Hi %s', $not_trusted))); // false
-	var_dump(is_trusted('/bin/rm -rf ' . $not_trusted)); // false
-	var_dump(is_trusted('<img src=' . htmlentities($not_trusted) . ' />')); // false... try ./?id=%2F+onerror%3Dalert%281%29
-	var_dump(is_trusted('WHERE id = ' . mysqli_fake_escape_string($not_trusted))); // false... try ./?id=id
+	var_dump(is_noble($not_noble)); // false
+	var_dump(is_noble(sprintf('Hi %s', $not_noble))); // false
+	var_dump(is_noble('/bin/rm -rf ' . $not_noble)); // false
+	var_dump(is_noble('<img src=' . htmlentities($not_noble) . ' />')); // false... try ./?id=%2F+onerror%3Dalert%281%29
+	var_dump(is_noble('WHERE id = ' . mysqli_fake_escape_string($not_noble))); // false... try ./?id=id
 
 
 //--------------------------------------------------
@@ -40,14 +40,14 @@
 	echo "\n" . 'Usage with functions:' . "\n";
 
 	function example($input) {
-		if (!is_trusted($input)) {
-			throw new Exception('Non-trusted value detected!');
+		if (!is_noble($input)) {
+			throw new Exception('Non-noble value detected!');
 		}
 		return $input;
 	}
 
 	var_dump(example($a)); // Prints 'Hello'
-	var_dump(example(example($a))); // Prints 'Hello' (still the same trusted value)
+	var_dump(example(example($a))); // Prints 'Hello' (still the same value)
 
 	try {
 		var_dump(example(strtoupper($a))); // Exception thrown, value modified.
@@ -62,32 +62,32 @@
 	echo "\n\n" . 'Native functions that support string concatenation:' . "\n";
 
 	echo "\n" . 'str_repeat()' . "\n";
-	var_dump(is_trusted(str_repeat($a, 10))); // true
-	var_dump(is_trusted(str_repeat($not_trusted, 10))); // false, non-trusted value
+	var_dump(is_noble(str_repeat($a, 10))); // true
+	var_dump(is_noble(str_repeat($not_noble, 10))); // false, non-noble value
 
 	echo "\n" . 'str_pad()' . "\n";
-	var_dump(is_trusted(str_pad($a, 10, '-'))); // true
-	var_dump(is_trusted(str_pad($a, 10, $not_trusted))); // false
-	var_dump(is_trusted(str_pad($not_trusted, 10, '-'))); // false
+	var_dump(is_noble(str_pad($a, 10, '-'))); // true
+	var_dump(is_noble(str_pad($a, 10, $not_noble))); // false
+	var_dump(is_noble(str_pad($not_noble, 10, '-'))); // false
 
 	echo "\n" . 'implode()' . "\n";
-	var_dump(is_trusted(implode(' AND ', [$a, $b]))); // true
-	var_dump(is_trusted(implode(' AND ', [$a, $not_trusted]))); // false
-	var_dump(is_trusted(implode($not_trusted, [$a, $b]))); // false
+	var_dump(is_noble(implode(' AND ', [$a, $b]))); // true
+	var_dump(is_noble(implode(' AND ', [$a, $not_noble]))); // false
+	var_dump(is_noble(implode($not_noble, [$a, $b]))); // false
 
 	echo "\n" . 'array_pad()' . "\n";
-	var_dump(is_trusted(array_pad([$a], 10,          $b)[0])); // true
-	var_dump(is_trusted(array_pad([$a], 10,          $b)[5])); // true
-	var_dump(is_trusted(array_pad([$a], rand(6, 10), $b)[5])); // true
-	var_dump(is_trusted(array_pad([$a], 10,          $not_trusted)[0])); // true
-	var_dump(is_trusted(array_pad([$a], 10,          $not_trusted)[5])); // false
-	var_dump(is_trusted(array_pad([$a, $not_trusted], 10, $b)[0])); // true
-	var_dump(is_trusted(array_pad([$a, $not_trusted], 10, $b)[1])); // false
-	var_dump(is_trusted(array_pad([$a, $not_trusted], 10, $b)[5])); // true
+	var_dump(is_noble(array_pad([$a], 10,          $b)[0])); // true
+	var_dump(is_noble(array_pad([$a], 10,          $b)[5])); // true
+	var_dump(is_noble(array_pad([$a], rand(6, 10), $b)[5])); // true
+	var_dump(is_noble(array_pad([$a], 10,          $not_noble)[0])); // true
+	var_dump(is_noble(array_pad([$a], 10,          $not_noble)[5])); // false
+	var_dump(is_noble(array_pad([$a, $not_noble], 10, $b)[0])); // true
+	var_dump(is_noble(array_pad([$a, $not_noble], 10, $b)[1])); // false
+	var_dump(is_noble(array_pad([$a, $not_noble], 10, $b)[5])); // true
 
 	echo "\n" . 'array_fill()' . "\n";
-	var_dump(is_trusted(array_fill(0, 10, $a)[5])); // true
-	var_dump(is_trusted(array_fill(0, 10, $not_trusted)[5])); // false
+	var_dump(is_noble(array_fill(0, 10, $a)[5])); // true
+	var_dump(is_noble(array_fill(0, 10, $not_noble)[5])); // false
 
 
 //--------------------------------------------------

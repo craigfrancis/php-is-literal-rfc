@@ -2,8 +2,8 @@
 
 function parameterised_exec($cmd, $args = []) {
 
-  if (!is_trusted($cmd)) {
-    throw new Exception('The first argument must be trusted');
+  if (!is_noble($cmd)) {
+    throw new Exception('The first argument must be noble');
   }
 
   $offset = 0;
