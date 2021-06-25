@@ -103,7 +103,7 @@ example(example($a)); // OK, still the same literal value.
 example(strtoupper($a)); // Exception thrown.
 ```
 
-## Try it
+## Try It
 
 [Test it out on 3v4l.org](https://3v4l.org/#focus=rfc.literals) - Currently using the function name `is_noble()`, while we tested integer support.
 
@@ -254,7 +254,7 @@ While most systems can use literal values entirely, these special non-literal va
 
 [How this can be done with aliases](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/example.php?ts=4#L194), or the [example Query Builder](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/example.php?ts=4#L229).
 
-### Faking it
+### Faking It
 
 **What if I really really need to mark a value as a literal?**
 
@@ -384,7 +384,7 @@ Strings have multiple flags already that are off by default - this is the correc
 
 This allows you to "introspect classes, interfaces, functions, methods and extensions"; it's not currently set up for object methods to inspect the code calling it. Even if that was to be added (unlikely), it could only check if the literal value was defined there, it couldn't handle variables (tracking back to their source), nor could it provide any future scope for a dedicated type, nor could native functions work with this (see "Future Scope").
 
-### Interned Strings
+### Interned Strings: chr
 
 **Why does the output from `chr()` appear as a literal?**
 
@@ -469,6 +469,7 @@ N/A
 
 - **Joe Watkins**, krakjoe, for writing the full implementation, including support for concatenation and integers, and helping me though the RFC process.
 - **Máté Kocsis**, mate-kocsis, for setting up and doing the performance testing.
+- **Scott Arciszewski**, CiPHPerCoder, for checking over the RFC, and provided text on how we could implement integer support under a `is_noble()` name.
 - **Dan Ackroyd**, DanAck, for starting the [first implementation](https://github.com/php/php-src/compare/master...Danack:is_literal_attempt_two), which made this a reality, providing `literal_concat()` and `literal_implode()`, and followup on how it should work.
 - **Xinchen Hui**, who created the Taint Extension, allowing me to test the idea; and noting how Taint in PHP5 was complex, but "with PHP7's new zend_string, and string flags, the implementation will become easier" [source](https://news-web.php.net/php.internals/87396).
 - **Rowan Francis**, for proof-reading, and helping me make an RFC that contains readable English.
