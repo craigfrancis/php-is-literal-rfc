@@ -1,0 +1,3463 @@
+diff --git a/Zend/zend_compile.c b/Zend/zend_compile.c
+index dade906f4b891..c8c326bae0b8e 100644
+--- a/Zend/zend_compile.c
++++ b/Zend/zend_compile.c
+@@ -546,6 +546,8 @@ static inline int zend_add_literal_string(zend_string **str) /* {{{ */
+ {
+ 	int ret;
+ 	zval zv;
++	*str = zend_string_set_literal(*str);
++
+ 	ZVAL_STR(&zv, *str);
+ 	ret = zend_add_literal(&zv);
+ 	*str = Z_STR(zv);
+@@ -3821,7 +3823,21 @@ static zend_result zend_compile_func_is_scalar(znode *result, zend_ast_list *arg
+ 	opline = zend_emit_op_tmp(result, ZEND_TYPE_CHECK, &arg_node, NULL);
+     opline->extended_value = (1 << IS_FALSE | 1 << IS_TRUE | 1 << IS_DOUBLE | 1 << IS_LONG | 1 << IS_STRING);
+ 	return SUCCESS;
+-}
++} /* }}} */
++
++static zend_result zend_compile_func_is_literal(znode *result, zend_ast_list *args) /* {{{ */
++{
++	znode arg_node;
++
++	if (args->children != 1) {
++		return FAILURE;
++	}
++
++	zend_compile_expr(&arg_node, args->child[0]);
++	zend_emit_op(result, ZEND_LITERAL_CHECK, &arg_node, NULL);
++
++	return SUCCESS;
++} /* }}} */
+ 
+ zend_result zend_compile_func_cast(znode *result, zend_ast_list *args, uint32_t type) /* {{{ */
+ {
+@@ -4352,6 +4368,8 @@ zend_result zend_try_compile_special_func(znode *result, zend_string *lcname, ze
+ 		return zend_compile_func_typecheck(result, args, IS_RESOURCE);
+ 	} else if (zend_string_equals_literal(lcname, "is_scalar")) {
+ 		return zend_compile_func_is_scalar(result, args);
++	} else if (zend_string_equals_literal(lcname, "is_literal")) {
++		return zend_compile_func_is_literal(result, args);
+ 	} else if (zend_string_equals_literal(lcname, "boolval")) {
+ 		return zend_compile_func_cast(result, args, _IS_BOOL);
+ 	} else if (zend_string_equals_literal(lcname, "intval")) {
+@@ -6384,6 +6402,8 @@ static void zend_compile_attributes(HashTable **attributes, zend_ast *ast, uint3
+ 			zend_string *name = zend_resolve_class_name_ast(el->child[0]);
+ 			zend_ast_list *args = el->child[1] ? zend_ast_get_list(el->child[1]) : NULL;
+ 
++			ZSTR_SET_LITERAL(&name);
++
+ 			uint32_t flags = (CG(active_op_array)->fn_flags & ZEND_ACC_STRICT_TYPES)
+ 				? ZEND_ATTRIBUTE_STRICT_TYPES : 0;
+ 			attr = zend_add_attribute(
+@@ -6409,6 +6429,8 @@ static void zend_compile_attributes(HashTable **attributes, zend_ast *ast, uint3
+ 						arg_ast_ptr = &arg_ast->child[1];
+ 						uses_named_args = 1;
+ 
++						ZSTR_SET_LITERAL(&attr->args[j].name);
++
+ 						for (uint32_t k = 0; k < j; k++) {
+ 							if (attr->args[k].name &&
+ 									zend_string_equals(attr->args[k].name, attr->args[j].name)) {
+@@ -6422,6 +6444,10 @@ static void zend_compile_attributes(HashTable **attributes, zend_ast *ast, uint3
+ 					}
+ 
+ 					zend_const_expr_to_zval(&attr->args[j].value, arg_ast_ptr);
++
++					if (Z_TYPE(attr->args[j].value) == IS_STRING) {
++						ZSTR_SET_LITERAL(&Z_STR(attr->args[j].value));
++					}
+ 				}
+ 			}
+ 		}
+@@ -6964,6 +6990,7 @@ zend_string *zend_begin_method_decl(zend_op_array *op_array, zend_string *name,
+ 
+ 	op_array->scope = ce;
+ 	op_array->function_name = zend_string_copy(name);
++	ZSTR_SET_LITERAL(&op_array->function_name);
+ 
+ 	lcname = zend_string_tolower(name);
+ 	lcname = zend_new_interned_string(lcname);
+@@ -6998,6 +7025,8 @@ static void zend_begin_func_decl(znode *result, zend_op_array *op_array, zend_as
+ 
+ 	unqualified_name = decl->name;
+ 	op_array->function_name = name = zend_prefix_with_ns(unqualified_name);
++
++	ZSTR_SET_LITERAL(&op_array->function_name);
+ 	lcname = zend_string_tolower(name);
+ 
+ 	if (FC(imports_function)) {
+@@ -7244,12 +7273,19 @@ void zend_compile_prop_decl(zend_ast *ast, zend_ast *type_ast, uint32_t flags, z
+ 						ZSTR_VAL(ce->name), ZSTR_VAL(name), ZSTR_VAL(str));
+ 				}
+ 			}
++			if (Z_TYPE(value_zv) == IS_STRING) {
++				ZSTR_SET_LITERAL(&Z_STR(value_zv));
++			}
+ 		} else if (!ZEND_TYPE_IS_SET(type)) {
+ 			ZVAL_NULL(&value_zv);
+ 		} else {
+ 			ZVAL_UNDEF(&value_zv);
+ 		}
+ 
++		if (Z_TYPE(value_zv) == IS_STRING) {
++			ZSTR_SET_LITERAL(&Z_STR(value_zv));
++		}
++
+ 		info = zend_declare_typed_property(ce, name, &value_zv, flags, doc_comment, type);
+ 
+ 		if (attr_ast) {
+@@ -8364,11 +8400,20 @@ static bool zend_try_ct_eval_array(zval *result, zend_ast *ast) /* {{{ */
+ 			}
+ 		}
+ 
++		if (Z_TYPE_P(value) == IS_STRING) {
++			ZSTR_SET_LITERAL(&Z_STR_P(value));
++		}
++
+ 		Z_TRY_ADDREF_P(value);
+ 
+ 		key_ast = elem_ast->child[1];
+ 		if (key_ast) {
+ 			zval *key = zend_ast_get_zval(key_ast);
++
++			if (Z_TYPE_P(key) == IS_STRING) {
++                ZSTR_SET_LITERAL(&Z_STR_P(key));
++            }
++
+ 			switch (Z_TYPE_P(key)) {
+ 				case IS_LONG:
+ 					zend_hash_index_update(Z_ARRVAL_P(result), Z_LVAL_P(key), value);
+diff --git a/Zend/zend_operators.c b/Zend/zend_operators.c
+index 8fb31f7dbff35..ee922db7c7489 100644
+--- a/Zend/zend_operators.c
++++ b/Zend/zend_operators.c
+@@ -1859,10 +1859,15 @@ ZEND_API zend_result ZEND_FASTCALL concat_function(zval *result, zval *op1, zval
+ {
+     zval *orig_op1 = op1;
+ 	zval op1_copy, op2_copy;
+-
++	bool literal = false;
++    
+ 	ZVAL_UNDEF(&op1_copy);
+ 	ZVAL_UNDEF(&op2_copy);
+ 
++	if (UNEXPECTED(Z_IS_LITERAL_P(op1) && Z_IS_LITERAL_P(op2))) {
++	    literal = true;
++	}
++
+ 	do {
+ 	 	if (UNEXPECTED(Z_TYPE_P(op1) != IS_STRING)) {
+ 	 		if (Z_ISREF_P(op1)) {
+@@ -1913,6 +1918,11 @@ ZEND_API zend_result ZEND_FASTCALL concat_function(zval *result, zval *op1, zval
+ 			}
+ 			ZVAL_COPY(result, op2);
+ 		}
++        if (literal) {
++            ZSTR_SET_LITERAL(&Z_STR_P(result));
++        } else {
++            ZSTR_UNSET_LITERAL(&Z_STR_P(result));
++        }
+ 	} else if (UNEXPECTED(Z_STRLEN_P(op2) == 0)) {
+ 		if (EXPECTED(result != op1)) {
+ 			if (result == orig_op1) {
+@@ -1920,6 +1930,11 @@ ZEND_API zend_result ZEND_FASTCALL concat_function(zval *result, zval *op1, zval
+ 			}
+ 			ZVAL_COPY(result, op1);
+ 		}
++        if (literal) {
++            ZSTR_SET_LITERAL(&Z_STR_P(result));
++        } else {
++            ZSTR_UNSET_LITERAL(&Z_STR_P(result));
++        }
+ 	} else {
+ 		size_t op1_len = Z_STRLEN_P(op1);
+ 		size_t op2_len = Z_STRLEN_P(op2);
+@@ -1939,12 +1954,18 @@ ZEND_API zend_result ZEND_FASTCALL concat_function(zval *result, zval *op1, zval
+ 		if (result == op1 && Z_REFCOUNTED_P(result)) {
+ 			/* special case, perform operations on result */
+ 			result_str = zend_string_extend(Z_STR_P(result), result_len, 0);
++			if (UNEXPECTED(!literal && ZSTR_IS_LITERAL(result_str))) {
++			    ZSTR_UNSET_LITERAL(&result_str);
++			}
+ 		} else {
+ 			result_str = zend_string_alloc(result_len, 0);
+ 			memcpy(ZSTR_VAL(result_str), Z_STRVAL_P(op1), op1_len);
+ 			if (result == orig_op1) {
+ 				i_zval_ptr_dtor(result);
+ 			}
++			if (UNEXPECTED(literal && !ZSTR_IS_LITERAL(result_str))) {
++			    ZSTR_SET_LITERAL_FAST(result_str);
++			}
+ 		}
+ 
+ 		/* This has to happen first to account for the cases where result == op1 == op2 and
+diff --git a/Zend/zend_string.h b/Zend/zend_string.h
+index b0205bd32d48c..7f31909330e6a 100644
+--- a/Zend/zend_string.h
++++ b/Zend/zend_string.h
+@@ -330,6 +330,54 @@ static zend_always_inline void zend_string_release_ex(zend_string *s, bool persi
+ 	}
+ }
+ 
++#define ZSTR_IS_LITERAL(s)	 (GC_TYPE_INFO(s) & (IS_STR_LITERAL|IS_STR_INTERNED))
++
++static zend_always_inline zend_string* zend_string_set_literal(zend_string *s) {
++	if (UNEXPECTED(ZSTR_IS_LITERAL(s))) {
++		return s;
++	}
++
++	if (EXPECTED(GC_REFCOUNT(s) == 1 && !ZSTR_IS_INTERNED(s))) {
++		GC_TYPE_INFO(s) |= IS_STR_LITERAL;
++		return s;
++	}
++
++	zend_string *literal = zend_string_dup(s, 0);
++
++	GC_TYPE_INFO(literal) |= IS_STR_LITERAL;
++
++	zend_string_release(s);
++
++	return literal;
++}
++
++static zend_always_inline zend_string* zend_string_unset_literal(zend_string *s) {
++	if (UNEXPECTED(!ZSTR_IS_LITERAL(s))) {
++		return s;
++	}
++
++	if (EXPECTED(GC_REFCOUNT(s) == 1 && !ZSTR_IS_INTERNED(s))) {
++		GC_TYPE_INFO(s) &= ~IS_STR_LITERAL;
++		return s;
++	}
++
++	zend_string *literal = zend_string_dup(s, 0);
++
++	zend_string_release(s);
++
++	return literal;
++}
++
++static zend_always_inline void zend_string_set_literal_fast(zend_string *s) {
++	ZEND_ASSERT(GC_REFCOUNT(s) == 1 && !ZSTR_IS_INTERNED(s));
++
++	GC_TYPE_INFO(s) |= IS_STR_LITERAL;
++}
++
++#define ZSTR_SET_LITERAL(s)    *(s) = zend_string_set_literal(*(s))
++#define ZSTR_SET_LITERAL_FAST  zend_string_set_literal_fast
++#define ZSTR_UNSET_LITERAL(s)  *(s) = zend_string_unset_literal(*(s))
++
+ #if defined(__GNUC__) && (defined(__i386__) || (defined(__x86_64__) && !defined(__ILP32__)))
+ BEGIN_EXTERN_C()
+ ZEND_API bool ZEND_FASTCALL zend_string_equal_val(zend_string *s1, zend_string *s2);
+diff --git a/Zend/zend_types.h b/Zend/zend_types.h
+index 963362222d0eb..4414e95ad9841 100644
+--- a/Zend/zend_types.h
++++ b/Zend/zend_types.h
+@@ -698,6 +698,7 @@ static zend_always_inline uint32_t zval_gc_info(uint32_t gc_type_info) {
+ #define IS_STR_PERSISTENT			GC_PERSISTENT /* allocated using malloc */
+ #define IS_STR_PERMANENT        	(1<<8)        /* relives request boundary */
+ #define IS_STR_VALID_UTF8           (1<<9)        /* valid UTF-8 according to PCRE */
++#define IS_STR_LITERAL              (1<<10)
+ 
+ /* array flags */
+ #define IS_ARRAY_IMMUTABLE			GC_IMMUTABLE
+@@ -745,6 +746,9 @@ static zend_always_inline uint32_t zval_gc_info(uint32_t gc_type_info) {
+ #define Z_PROTECT_RECURSION_P(zv)   Z_PROTECT_RECURSION(*(zv))
+ #define Z_UNPROTECT_RECURSION_P(zv) Z_UNPROTECT_RECURSION(*(zv))
+ 
++#define Z_IS_LITERAL(zval)          (Z_TYPE(zval) == IS_STRING && ZSTR_IS_LITERAL(Z_STR(zval)))
++#define Z_IS_LITERAL_P(zv)          Z_IS_LITERAL(*(zv))
++
+ /* All data types < IS_STRING have their constructor/destructors skipped */
+ #define Z_CONSTANT(zval)			(Z_TYPE(zval) == IS_CONSTANT_AST)
+ #define Z_CONSTANT_P(zval_p)		Z_CONSTANT(*(zval_p))
+diff --git a/Zend/zend_vm_def.h b/Zend/zend_vm_def.h
+index e6a49d1c0d766..f991bc6f8cb62 100644
+--- a/Zend/zend_vm_def.h
++++ b/Zend/zend_vm_def.h
+@@ -408,6 +408,9 @@ ZEND_VM_HANDLER(8, ZEND_CONCAT, CONST|TMPVAR|CV, CONST|TMPVAR|CV, SPEC(NO_CONST_
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str) && !ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (OP2_TYPE & (IS_TMP_VAR|IS_VAR)) {
+@@ -415,6 +418,9 @@ ZEND_VM_HANDLER(8, ZEND_CONCAT, CONST|TMPVAR|CV, CONST|TMPVAR|CV, SPEC(NO_CONST_
+ 			}
+ 		} else {
+ 			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_SET_LITERAL_FAST(str);
++			}
+ 			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -3100,7 +3106,6 @@ ZEND_VM_COLD_CONSTCONST_HANDLER(53, ZEND_FAST_CONCAT, CONST|TMPVAR|CV, CONST|TMP
+ 	zval *op1, *op2;
+ 	zend_string *op1_str, *op2_str, *str;
+ 
+-
+ 	op1 = GET_OP1_ZVAL_PTR_UNDEF(BP_VAR_R);
+ 	op2 = GET_OP2_ZVAL_PTR_UNDEF(BP_VAR_R);
+ 	if ((OP1_TYPE == IS_CONST || EXPECTED(Z_TYPE_P(op1) == IS_STRING)) &&
+@@ -3132,6 +3137,9 @@ ZEND_VM_COLD_CONSTCONST_HANDLER(53, ZEND_FAST_CONCAT, CONST|TMPVAR|CV, CONST|TMP
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str) && !ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (OP2_TYPE & (IS_TMP_VAR|IS_VAR)) {
+@@ -3139,6 +3147,9 @@ ZEND_VM_COLD_CONSTCONST_HANDLER(53, ZEND_FAST_CONCAT, CONST|TMPVAR|CV, CONST|TMP
+ 			}
+ 		} else {
+ 			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_SET_LITERAL_FAST(str);
++			}
+ 			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -3153,6 +3164,7 @@ ZEND_VM_COLD_CONSTCONST_HANDLER(53, ZEND_FAST_CONCAT, CONST|TMPVAR|CV, CONST|TMP
+ 	}
+ 
+ 	SAVE_OPLINE();
++
+ 	if (OP1_TYPE == IS_CONST) {
+ 		op1_str = Z_STR_P(op1);
+ 	} else if (EXPECTED(Z_TYPE_P(op1) == IS_STRING)) {
+@@ -3167,12 +3179,14 @@ ZEND_VM_COLD_CONSTCONST_HANDLER(53, ZEND_FAST_CONCAT, CONST|TMPVAR|CV, CONST|TMP
+ 		op2_str = Z_STR_P(op2);
+ 	} else if (EXPECTED(Z_TYPE_P(op2) == IS_STRING)) {
+ 		op2_str = zend_string_copy(Z_STR_P(op2));
++
+ 	} else {
+ 		if (OP2_TYPE == IS_CV && UNEXPECTED(Z_TYPE_P(op2) == IS_UNDEF)) {
+ 			ZVAL_UNDEFINED_OP2();
+ 		}
+ 		op2_str = zval_get_string_func(op2);
+ 	}
++
+ 	do {
+ 		if (OP1_TYPE != IS_CONST) {
+ 			if (UNEXPECTED(ZSTR_LEN(op1_str) == 0)) {
+@@ -3199,6 +3213,9 @@ ZEND_VM_COLD_CONSTCONST_HANDLER(53, ZEND_FAST_CONCAT, CONST|TMPVAR|CV, CONST|TMP
+ 			}
+ 		}
+ 		str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++		if (UNEXPECTED(ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str))) {
++			ZSTR_SET_LITERAL_FAST(str);
++		}
+ 		memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 		memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 		ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -3209,6 +3226,7 @@ ZEND_VM_COLD_CONSTCONST_HANDLER(53, ZEND_FAST_CONCAT, CONST|TMPVAR|CV, CONST|TMP
+ 			zend_string_release_ex(op2_str, 0);
+ 		}
+ 	} while (0);
++
+ 	FREE_OP1();
+ 	FREE_OP2();
+ 	ZEND_VM_NEXT_OPCODE_CHECK_EXCEPTION();
+@@ -3287,11 +3305,12 @@ ZEND_VM_HANDLER(55, ZEND_ROPE_ADD, TMP, CONST|TMPVAR|CV, NUM)
+ ZEND_VM_HANDLER(56, ZEND_ROPE_END, TMP, CONST|TMPVAR|CV, NUM)
+ {
+ 	USE_OPLINE
+-	zend_string **rope;
+-	zval *var, *ret;
++	zend_string **rope, *result;
++	zval *var;
+ 	uint32_t i;
+ 	size_t len = 0;
+ 	char *target;
++	bool literal = true;
+ 
+ 	rope = (zend_string**)EX_VAR(opline->op1.var);
+ 	if (OP2_TYPE == IS_CONST) {
+@@ -3327,16 +3346,22 @@ ZEND_VM_HANDLER(56, ZEND_ROPE_END, TMP, CONST|TMPVAR|CV, NUM)
+ 	for (i = 0; i <= opline->extended_value; i++) {
+ 		len += ZSTR_LEN(rope[i]);
+ 	}
+-	ret = EX_VAR(opline->result.var);
+-	ZVAL_STR(ret, zend_string_alloc(len, 0));
+-	target = Z_STRVAL_P(ret);
++
++	result = zend_string_alloc(len, 0);
++	target = ZSTR_VAL(result);
+ 	for (i = 0; i <= opline->extended_value; i++) {
++		if (literal && !ZSTR_IS_LITERAL(rope[i])) {
++			literal = false;
++		}
+ 		memcpy(target, ZSTR_VAL(rope[i]), ZSTR_LEN(rope[i]));
+ 		target += ZSTR_LEN(rope[i]);
+ 		zend_string_release_ex(rope[i], 0);
+ 	}
+ 	*target = '\0';
+-
++	if (literal) {
++		ZSTR_SET_LITERAL_FAST(result);
++	}
++	ZVAL_STR(EX_VAR(opline->result.var), result);
+ 	ZEND_VM_NEXT_OPCODE();
+ }
+ 
+@@ -4241,6 +4266,18 @@ ZEND_VM_COLD_HANDLER(201, ZEND_VERIFY_NEVER_TYPE, UNUSED, UNUSED)
+ 	HANDLE_EXCEPTION();
+ }
+ 
++ZEND_VM_HOT_HANDLER(202, ZEND_LITERAL_CHECK, ANY, UNUSED)
++{
++	USE_OPLINE
++
++	zval *zv = GET_OP1_ZVAL_PTR_UNDEF(BP_VAR_R);
++
++	ZVAL_BOOL(EX_VAR(opline->result.var), Z_IS_LITERAL_P(zv));
++
++    FREE_OP1();
++    ZEND_VM_NEXT_OPCODE();
++}
++
+ ZEND_VM_INLINE_HANDLER(62, ZEND_RETURN, CONST|TMP|VAR|CV, ANY, SPEC(OBSERVER))
+ {
+ 	USE_OPLINE
+diff --git a/Zend/zend_vm_execute.h b/Zend/zend_vm_execute.h
+index 7fabd5d2673a5..4142bee29d9d3 100644
+--- a/Zend/zend_vm_execute.h
++++ b/Zend/zend_vm_execute.h
+@@ -3774,6 +3774,18 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_INIT_DYNAMIC_CALL_SPEC_TMPVAR_
+ 	ZEND_VM_NEXT_OPCODE_CHECK_EXCEPTION();
+ }
+ 
++static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_LITERAL_CHECK_SPEC_UNUSED_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
++{
++	USE_OPLINE
++
++	zval *zv = get_zval_ptr_undef(opline->op1_type, opline->op1, BP_VAR_R);
++
++	ZVAL_BOOL(EX_VAR(opline->result.var), Z_IS_LITERAL_P(zv));
++
++    FREE_OP(opline->op1_type, opline->op1.var);
++    ZEND_VM_NEXT_OPCODE();
++}
++
+ static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_RECV_SPEC_UNUSED_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
+ {
+ 	USE_OPLINE
+@@ -4743,6 +4755,9 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CAST_SPEC_CONST_H
+ 			break;
+ 		case IS_STRING:
+ 			ZVAL_STR(result, zval_get_string(expr));
++			if (UNEXPECTED(Z_TYPE_P(expr) == IS_LONG)) {
++				ZSTR_SET_LITERAL(&Z_STR_P(result));
++			}
+ 			break;
+ 		default:
+ 			ZEND_ASSERT(opline->extended_value != _IS_BOOL && "Must use ZEND_BOOL instead");
+@@ -6465,7 +6480,6 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_
+ 	zval *op1, *op2;
+ 	zend_string *op1_str, *op2_str, *str;
+ 
+-
+ 	op1 = RT_CONSTANT(opline, opline->op1);
+ 	op2 = RT_CONSTANT(opline, opline->op2);
+ 	if ((IS_CONST == IS_CONST || EXPECTED(Z_TYPE_P(op1) == IS_STRING)) &&
+@@ -6497,6 +6511,9 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str) && !ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CONST & (IS_TMP_VAR|IS_VAR)) {
+@@ -6504,6 +6521,9 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_
+ 			}
+ 		} else {
+ 			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_SET_LITERAL_FAST(str);
++			}
+ 			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -6518,6 +6538,7 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_
+ 	}
+ 
+ 	SAVE_OPLINE();
++
+ 	if (IS_CONST == IS_CONST) {
+ 		op1_str = Z_STR_P(op1);
+ 	} else if (EXPECTED(Z_TYPE_P(op1) == IS_STRING)) {
+@@ -6532,12 +6553,14 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_
+ 		op2_str = Z_STR_P(op2);
+ 	} else if (EXPECTED(Z_TYPE_P(op2) == IS_STRING)) {
+ 		op2_str = zend_string_copy(Z_STR_P(op2));
++
+ 	} else {
+ 		if (IS_CONST == IS_CV && UNEXPECTED(Z_TYPE_P(op2) == IS_UNDEF)) {
+ 			ZVAL_UNDEFINED_OP2();
+ 		}
+ 		op2_str = zval_get_string_func(op2);
+ 	}
++
+ 	do {
+ 		if (IS_CONST != IS_CONST) {
+ 			if (UNEXPECTED(ZSTR_LEN(op1_str) == 0)) {
+@@ -6564,6 +6587,9 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_
+ 			}
+ 		}
+ 		str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++		if (UNEXPECTED(ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str))) {
++			ZSTR_SET_LITERAL_FAST(str);
++		}
+ 		memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 		memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 		ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -8410,6 +8436,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CONST_TMPVAR_HANDL
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str) && !ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
+@@ -8417,6 +8446,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CONST_TMPVAR_HANDL
+ 			}
+ 		} else {
+ 			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_SET_LITERAL_FAST(str);
++			}
+ 			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -8792,7 +8824,6 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_TMPVAR_
+ 	zval *op1, *op2;
+ 	zend_string *op1_str, *op2_str, *str;
+ 
+-
+ 	op1 = RT_CONSTANT(opline, opline->op1);
+ 	op2 = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
+ 	if ((IS_CONST == IS_CONST || EXPECTED(Z_TYPE_P(op1) == IS_STRING)) &&
+@@ -8824,6 +8855,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_TMPVAR_
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str) && !ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
+@@ -8831,6 +8865,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_TMPVAR_
+ 			}
+ 		} else {
+ 			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_SET_LITERAL_FAST(str);
++			}
+ 			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -8845,6 +8882,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_TMPVAR_
+ 	}
+ 
+ 	SAVE_OPLINE();
++
+ 	if (IS_CONST == IS_CONST) {
+ 		op1_str = Z_STR_P(op1);
+ 	} else if (EXPECTED(Z_TYPE_P(op1) == IS_STRING)) {
+@@ -8859,12 +8897,14 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_TMPVAR_
+ 		op2_str = Z_STR_P(op2);
+ 	} else if (EXPECTED(Z_TYPE_P(op2) == IS_STRING)) {
+ 		op2_str = zend_string_copy(Z_STR_P(op2));
++
+ 	} else {
+ 		if ((IS_TMP_VAR|IS_VAR) == IS_CV && UNEXPECTED(Z_TYPE_P(op2) == IS_UNDEF)) {
+ 			ZVAL_UNDEFINED_OP2();
+ 		}
+ 		op2_str = zval_get_string_func(op2);
+ 	}
++
+ 	do {
+ 		if (IS_CONST != IS_CONST) {
+ 			if (UNEXPECTED(ZSTR_LEN(op1_str) == 0)) {
+@@ -8891,6 +8931,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_TMPVAR_
+ 			}
+ 		}
+ 		str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++		if (UNEXPECTED(ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str))) {
++			ZSTR_SET_LITERAL_FAST(str);
++		}
+ 		memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 		memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 		ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -10760,6 +10803,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CONST_CV_HANDLER(Z
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str) && !ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
+@@ -10767,6 +10813,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CONST_CV_HANDLER(Z
+ 			}
+ 		} else {
+ 			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_SET_LITERAL_FAST(str);
++			}
+ 			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -11142,7 +11191,6 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_CV_HAND
+ 	zval *op1, *op2;
+ 	zend_string *op1_str, *op2_str, *str;
+ 
+-
+ 	op1 = RT_CONSTANT(opline, opline->op1);
+ 	op2 = EX_VAR(opline->op2.var);
+ 	if ((IS_CONST == IS_CONST || EXPECTED(Z_TYPE_P(op1) == IS_STRING)) &&
+@@ -11174,6 +11222,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_CV_HAND
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str) && !ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
+@@ -11181,6 +11232,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_CV_HAND
+ 			}
+ 		} else {
+ 			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_SET_LITERAL_FAST(str);
++			}
+ 			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -11195,6 +11249,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_CV_HAND
+ 	}
+ 
+ 	SAVE_OPLINE();
++
+ 	if (IS_CONST == IS_CONST) {
+ 		op1_str = Z_STR_P(op1);
+ 	} else if (EXPECTED(Z_TYPE_P(op1) == IS_STRING)) {
+@@ -11209,12 +11264,14 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_CV_HAND
+ 		op2_str = Z_STR_P(op2);
+ 	} else if (EXPECTED(Z_TYPE_P(op2) == IS_STRING)) {
+ 		op2_str = zend_string_copy(Z_STR_P(op2));
++
+ 	} else {
+ 		if (IS_CV == IS_CV && UNEXPECTED(Z_TYPE_P(op2) == IS_UNDEF)) {
+ 			ZVAL_UNDEFINED_OP2();
+ 		}
+ 		op2_str = zval_get_string_func(op2);
+ 	}
++
+ 	do {
+ 		if (IS_CONST != IS_CONST) {
+ 			if (UNEXPECTED(ZSTR_LEN(op1_str) == 0)) {
+@@ -11241,6 +11298,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_CV_HAND
+ 			}
+ 		}
+ 		str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++		if (UNEXPECTED(ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str))) {
++			ZSTR_SET_LITERAL_FAST(str);
++		}
+ 		memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 		memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 		ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -14836,6 +14896,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_CONST_HANDL
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str) && !ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CONST & (IS_TMP_VAR|IS_VAR)) {
+@@ -14843,6 +14906,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_CONST_HANDL
+ 			}
+ 		} else {
+ 			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_SET_LITERAL_FAST(str);
++			}
+ 			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -15532,7 +15598,6 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CONST_
+ 	zval *op1, *op2;
+ 	zend_string *op1_str, *op2_str, *str;
+ 
+-
+ 	op1 = _get_zval_ptr_var(opline->op1.var EXECUTE_DATA_CC);
+ 	op2 = RT_CONSTANT(opline, opline->op2);
+ 	if (((IS_TMP_VAR|IS_VAR) == IS_CONST || EXPECTED(Z_TYPE_P(op1) == IS_STRING)) &&
+@@ -15564,6 +15629,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CONST_
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str) && !ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CONST & (IS_TMP_VAR|IS_VAR)) {
+@@ -15571,6 +15639,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CONST_
+ 			}
+ 		} else {
+ 			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_SET_LITERAL_FAST(str);
++			}
+ 			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -15585,6 +15656,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CONST_
+ 	}
+ 
+ 	SAVE_OPLINE();
++
+ 	if ((IS_TMP_VAR|IS_VAR) == IS_CONST) {
+ 		op1_str = Z_STR_P(op1);
+ 	} else if (EXPECTED(Z_TYPE_P(op1) == IS_STRING)) {
+@@ -15599,12 +15671,14 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CONST_
+ 		op2_str = Z_STR_P(op2);
+ 	} else if (EXPECTED(Z_TYPE_P(op2) == IS_STRING)) {
+ 		op2_str = zend_string_copy(Z_STR_P(op2));
++
+ 	} else {
+ 		if (IS_CONST == IS_CV && UNEXPECTED(Z_TYPE_P(op2) == IS_UNDEF)) {
+ 			ZVAL_UNDEFINED_OP2();
+ 		}
+ 		op2_str = zval_get_string_func(op2);
+ 	}
++
+ 	do {
+ 		if ((IS_TMP_VAR|IS_VAR) != IS_CONST) {
+ 			if (UNEXPECTED(ZSTR_LEN(op1_str) == 0)) {
+@@ -15631,6 +15705,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CONST_
+ 			}
+ 		}
+ 		str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++		if (UNEXPECTED(ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str))) {
++			ZSTR_SET_LITERAL_FAST(str);
++		}
+ 		memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 		memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 		ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -15641,6 +15718,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CONST_
+ 			zend_string_release_ex(op2_str, 0);
+ 		}
+ 	} while (0);
++
+ 	zval_ptr_dtor_nogc(EX_VAR(opline->op1.var));
+ 
+ 	ZEND_VM_NEXT_OPCODE_CHECK_EXCEPTION();
+@@ -16256,6 +16334,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_TMPVAR_HAND
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str) && !ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
+@@ -16263,6 +16344,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_TMPVAR_HAND
+ 			}
+ 		} else {
+ 			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_SET_LITERAL_FAST(str);
++			}
+ 			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -16952,7 +17036,6 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_TMPVAR
+ 	zval *op1, *op2;
+ 	zend_string *op1_str, *op2_str, *str;
+ 
+-
+ 	op1 = _get_zval_ptr_var(opline->op1.var EXECUTE_DATA_CC);
+ 	op2 = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
+ 	if (((IS_TMP_VAR|IS_VAR) == IS_CONST || EXPECTED(Z_TYPE_P(op1) == IS_STRING)) &&
+@@ -16984,6 +17067,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_TMPVAR
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str) && !ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
+@@ -16991,6 +17077,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_TMPVAR
+ 			}
+ 		} else {
+ 			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_SET_LITERAL_FAST(str);
++			}
+ 			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -17005,6 +17094,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_TMPVAR
+ 	}
+ 
+ 	SAVE_OPLINE();
++
+ 	if ((IS_TMP_VAR|IS_VAR) == IS_CONST) {
+ 		op1_str = Z_STR_P(op1);
+ 	} else if (EXPECTED(Z_TYPE_P(op1) == IS_STRING)) {
+@@ -17019,12 +17109,14 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_TMPVAR
+ 		op2_str = Z_STR_P(op2);
+ 	} else if (EXPECTED(Z_TYPE_P(op2) == IS_STRING)) {
+ 		op2_str = zend_string_copy(Z_STR_P(op2));
++
+ 	} else {
+ 		if ((IS_TMP_VAR|IS_VAR) == IS_CV && UNEXPECTED(Z_TYPE_P(op2) == IS_UNDEF)) {
+ 			ZVAL_UNDEFINED_OP2();
+ 		}
+ 		op2_str = zval_get_string_func(op2);
+ 	}
++
+ 	do {
+ 		if ((IS_TMP_VAR|IS_VAR) != IS_CONST) {
+ 			if (UNEXPECTED(ZSTR_LEN(op1_str) == 0)) {
+@@ -17051,6 +17143,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_TMPVAR
+ 			}
+ 		}
+ 		str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++		if (UNEXPECTED(ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str))) {
++			ZSTR_SET_LITERAL_FAST(str);
++		}
+ 		memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 		memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 		ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -17061,6 +17156,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_TMPVAR
+ 			zend_string_release_ex(op2_str, 0);
+ 		}
+ 	} while (0);
++
+ 	zval_ptr_dtor_nogc(EX_VAR(opline->op1.var));
+ 	zval_ptr_dtor_nogc(EX_VAR(opline->op2.var));
+ 	ZEND_VM_NEXT_OPCODE_CHECK_EXCEPTION();
+@@ -17930,6 +18026,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_CV_HANDLER(
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str) && !ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
+@@ -17937,6 +18036,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_CV_HANDLER(
+ 			}
+ 		} else {
+ 			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_SET_LITERAL_FAST(str);
++			}
+ 			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -18264,7 +18366,6 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CV_HAN
+ 	zval *op1, *op2;
+ 	zend_string *op1_str, *op2_str, *str;
+ 
+-
+ 	op1 = _get_zval_ptr_var(opline->op1.var EXECUTE_DATA_CC);
+ 	op2 = EX_VAR(opline->op2.var);
+ 	if (((IS_TMP_VAR|IS_VAR) == IS_CONST || EXPECTED(Z_TYPE_P(op1) == IS_STRING)) &&
+@@ -18296,6 +18397,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CV_HAN
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str) && !ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
+@@ -18303,6 +18407,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CV_HAN
+ 			}
+ 		} else {
+ 			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_SET_LITERAL_FAST(str);
++			}
+ 			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -18317,6 +18424,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CV_HAN
+ 	}
+ 
+ 	SAVE_OPLINE();
++
+ 	if ((IS_TMP_VAR|IS_VAR) == IS_CONST) {
+ 		op1_str = Z_STR_P(op1);
+ 	} else if (EXPECTED(Z_TYPE_P(op1) == IS_STRING)) {
+@@ -18331,12 +18439,14 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CV_HAN
+ 		op2_str = Z_STR_P(op2);
+ 	} else if (EXPECTED(Z_TYPE_P(op2) == IS_STRING)) {
+ 		op2_str = zend_string_copy(Z_STR_P(op2));
++
+ 	} else {
+ 		if (IS_CV == IS_CV && UNEXPECTED(Z_TYPE_P(op2) == IS_UNDEF)) {
+ 			ZVAL_UNDEFINED_OP2();
+ 		}
+ 		op2_str = zval_get_string_func(op2);
+ 	}
++
+ 	do {
+ 		if ((IS_TMP_VAR|IS_VAR) != IS_CONST) {
+ 			if (UNEXPECTED(ZSTR_LEN(op1_str) == 0)) {
+@@ -18363,6 +18473,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CV_HAN
+ 			}
+ 		}
+ 		str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++		if (UNEXPECTED(ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str))) {
++			ZSTR_SET_LITERAL_FAST(str);
++		}
+ 		memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 		memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 		ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -18373,6 +18486,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CV_HAN
+ 			zend_string_release_ex(op2_str, 0);
+ 		}
+ 	} while (0);
++
+ 	zval_ptr_dtor_nogc(EX_VAR(opline->op1.var));
+ 
+ 	ZEND_VM_NEXT_OPCODE_CHECK_EXCEPTION();
+@@ -18965,6 +19079,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CAST_SPEC_TMP_HANDLER(ZEND_OPC
+ 			break;
+ 		case IS_STRING:
+ 			ZVAL_STR(result, zval_get_string(expr));
++			if (UNEXPECTED(Z_TYPE_P(expr) == IS_LONG)) {
++				ZSTR_SET_LITERAL(&Z_STR_P(result));
++			}
+ 			break;
+ 		default:
+ 			ZEND_ASSERT(opline->extended_value != _IS_BOOL && "Must use ZEND_BOOL instead");
+@@ -19464,11 +19581,12 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_ADD_SPEC_TMP_CONST_HANDLE
+ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_END_SPEC_TMP_CONST_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
+ {
+ 	USE_OPLINE
+-	zend_string **rope;
+-	zval *var, *ret;
++	zend_string **rope, *result;
++	zval *var;
+ 	uint32_t i;
+ 	size_t len = 0;
+ 	char *target;
++	bool literal = true;
+ 
+ 	rope = (zend_string**)EX_VAR(opline->op1.var);
+ 	if (IS_CONST == IS_CONST) {
+@@ -19504,16 +19622,22 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_END_SPEC_TMP_CONST_HANDLE
+ 	for (i = 0; i <= opline->extended_value; i++) {
+ 		len += ZSTR_LEN(rope[i]);
+ 	}
+-	ret = EX_VAR(opline->result.var);
+-	ZVAL_STR(ret, zend_string_alloc(len, 0));
+-	target = Z_STRVAL_P(ret);
++
++	result = zend_string_alloc(len, 0);
++	target = ZSTR_VAL(result);
+ 	for (i = 0; i <= opline->extended_value; i++) {
++		if (literal && !ZSTR_IS_LITERAL(rope[i])) {
++			literal = false;
++		}
+ 		memcpy(target, ZSTR_VAL(rope[i]), ZSTR_LEN(rope[i]));
+ 		target += ZSTR_LEN(rope[i]);
+ 		zend_string_release_ex(rope[i], 0);
+ 	}
+ 	*target = '\0';
+-
++	if (literal) {
++		ZSTR_SET_LITERAL_FAST(result);
++	}
++	ZVAL_STR(EX_VAR(opline->result.var), result);
+ 	ZEND_VM_NEXT_OPCODE();
+ }
+ 
+@@ -19940,11 +20064,12 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_ADD_SPEC_TMP_TMPVAR_HANDL
+ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_END_SPEC_TMP_TMPVAR_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
+ {
+ 	USE_OPLINE
+-	zend_string **rope;
+-	zval *var, *ret;
++	zend_string **rope, *result;
++	zval *var;
+ 	uint32_t i;
+ 	size_t len = 0;
+ 	char *target;
++	bool literal = true;
+ 
+ 	rope = (zend_string**)EX_VAR(opline->op1.var);
+ 	if ((IS_TMP_VAR|IS_VAR) == IS_CONST) {
+@@ -19980,16 +20105,22 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_END_SPEC_TMP_TMPVAR_HANDL
+ 	for (i = 0; i <= opline->extended_value; i++) {
+ 		len += ZSTR_LEN(rope[i]);
+ 	}
+-	ret = EX_VAR(opline->result.var);
+-	ZVAL_STR(ret, zend_string_alloc(len, 0));
+-	target = Z_STRVAL_P(ret);
++
++	result = zend_string_alloc(len, 0);
++	target = ZSTR_VAL(result);
+ 	for (i = 0; i <= opline->extended_value; i++) {
++		if (literal && !ZSTR_IS_LITERAL(rope[i])) {
++			literal = false;
++		}
+ 		memcpy(target, ZSTR_VAL(rope[i]), ZSTR_LEN(rope[i]));
+ 		target += ZSTR_LEN(rope[i]);
+ 		zend_string_release_ex(rope[i], 0);
+ 	}
+ 	*target = '\0';
+-
++	if (literal) {
++		ZSTR_SET_LITERAL_FAST(result);
++	}
++	ZVAL_STR(EX_VAR(opline->result.var), result);
+ 	ZEND_VM_NEXT_OPCODE();
+ }
+ 
+@@ -20799,11 +20930,12 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_ADD_SPEC_TMP_CV_HANDLER(Z
+ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_END_SPEC_TMP_CV_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
+ {
+ 	USE_OPLINE
+-	zend_string **rope;
+-	zval *var, *ret;
++	zend_string **rope, *result;
++	zval *var;
+ 	uint32_t i;
+ 	size_t len = 0;
+ 	char *target;
++	bool literal = true;
+ 
+ 	rope = (zend_string**)EX_VAR(opline->op1.var);
+ 	if (IS_CV == IS_CONST) {
+@@ -20839,16 +20971,22 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_END_SPEC_TMP_CV_HANDLER(Z
+ 	for (i = 0; i <= opline->extended_value; i++) {
+ 		len += ZSTR_LEN(rope[i]);
+ 	}
+-	ret = EX_VAR(opline->result.var);
+-	ZVAL_STR(ret, zend_string_alloc(len, 0));
+-	target = Z_STRVAL_P(ret);
++
++	result = zend_string_alloc(len, 0);
++	target = ZSTR_VAL(result);
+ 	for (i = 0; i <= opline->extended_value; i++) {
++		if (literal && !ZSTR_IS_LITERAL(rope[i])) {
++			literal = false;
++		}
+ 		memcpy(target, ZSTR_VAL(rope[i]), ZSTR_LEN(rope[i]));
+ 		target += ZSTR_LEN(rope[i]);
+ 		zend_string_release_ex(rope[i], 0);
+ 	}
+ 	*target = '\0';
+-
++	if (literal) {
++		ZSTR_SET_LITERAL_FAST(result);
++	}
++	ZVAL_STR(EX_VAR(opline->result.var), result);
+ 	ZEND_VM_NEXT_OPCODE();
+ }
+ 
+@@ -21579,6 +21717,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CAST_SPEC_VAR_HANDLER(ZEND_OPC
+ 			break;
+ 		case IS_STRING:
+ 			ZVAL_STR(result, zval_get_string(expr));
++			if (UNEXPECTED(Z_TYPE_P(expr) == IS_LONG)) {
++				ZSTR_SET_LITERAL(&Z_STR_P(result));
++			}
+ 			break;
+ 		default:
+ 			ZEND_ASSERT(opline->extended_value != _IS_BOOL && "Must use ZEND_BOOL instead");
+@@ -38113,6 +38254,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CAST_SPEC_CV_HANDLER(ZEND_OPCO
+ 			break;
+ 		case IS_STRING:
+ 			ZVAL_STR(result, zval_get_string(expr));
++			if (UNEXPECTED(Z_TYPE_P(expr) == IS_LONG)) {
++				ZSTR_SET_LITERAL(&Z_STR_P(result));
++			}
+ 			break;
+ 		default:
+ 			ZEND_ASSERT(opline->extended_value != _IS_BOOL && "Must use ZEND_BOOL instead");
+@@ -39044,6 +39188,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_CONST_HANDLER(Z
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str) && !ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CONST & (IS_TMP_VAR|IS_VAR)) {
+@@ -39051,6 +39198,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_CONST_HANDLER(Z
+ 			}
+ 		} else {
+ 			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_SET_LITERAL_FAST(str);
++			}
+ 			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -41385,7 +41535,6 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CONST_HAND
+ 	zval *op1, *op2;
+ 	zend_string *op1_str, *op2_str, *str;
+ 
+-
+ 	op1 = EX_VAR(opline->op1.var);
+ 	op2 = RT_CONSTANT(opline, opline->op2);
+ 	if ((IS_CV == IS_CONST || EXPECTED(Z_TYPE_P(op1) == IS_STRING)) &&
+@@ -41417,6 +41566,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CONST_HAND
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str) && !ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CONST & (IS_TMP_VAR|IS_VAR)) {
+@@ -41424,6 +41576,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CONST_HAND
+ 			}
+ 		} else {
+ 			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_SET_LITERAL_FAST(str);
++			}
+ 			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -41438,6 +41593,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CONST_HAND
+ 	}
+ 
+ 	SAVE_OPLINE();
++
+ 	if (IS_CV == IS_CONST) {
+ 		op1_str = Z_STR_P(op1);
+ 	} else if (EXPECTED(Z_TYPE_P(op1) == IS_STRING)) {
+@@ -41452,12 +41608,14 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CONST_HAND
+ 		op2_str = Z_STR_P(op2);
+ 	} else if (EXPECTED(Z_TYPE_P(op2) == IS_STRING)) {
+ 		op2_str = zend_string_copy(Z_STR_P(op2));
++
+ 	} else {
+ 		if (IS_CONST == IS_CV && UNEXPECTED(Z_TYPE_P(op2) == IS_UNDEF)) {
+ 			ZVAL_UNDEFINED_OP2();
+ 		}
+ 		op2_str = zval_get_string_func(op2);
+ 	}
++
+ 	do {
+ 		if (IS_CV != IS_CONST) {
+ 			if (UNEXPECTED(ZSTR_LEN(op1_str) == 0)) {
+@@ -41484,6 +41642,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CONST_HAND
+ 			}
+ 		}
+ 		str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++		if (UNEXPECTED(ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str))) {
++			ZSTR_SET_LITERAL_FAST(str);
++		}
+ 		memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 		memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 		ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -42726,6 +42887,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_TMPVAR_HANDLER(
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str) && !ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
+@@ -42733,6 +42897,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_TMPVAR_HANDLER(
+ 			}
+ 		} else {
+ 			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_SET_LITERAL_FAST(str);
++			}
+ 			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -44996,7 +45163,6 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_TMPVAR_HAN
+ 	zval *op1, *op2;
+ 	zend_string *op1_str, *op2_str, *str;
+ 
+-
+ 	op1 = EX_VAR(opline->op1.var);
+ 	op2 = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
+ 	if ((IS_CV == IS_CONST || EXPECTED(Z_TYPE_P(op1) == IS_STRING)) &&
+@@ -45028,6 +45194,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_TMPVAR_HAN
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str) && !ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
+@@ -45035,6 +45204,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_TMPVAR_HAN
+ 			}
+ 		} else {
+ 			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_SET_LITERAL_FAST(str);
++			}
+ 			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -45049,6 +45221,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_TMPVAR_HAN
+ 	}
+ 
+ 	SAVE_OPLINE();
++
+ 	if (IS_CV == IS_CONST) {
+ 		op1_str = Z_STR_P(op1);
+ 	} else if (EXPECTED(Z_TYPE_P(op1) == IS_STRING)) {
+@@ -45063,12 +45236,14 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_TMPVAR_HAN
+ 		op2_str = Z_STR_P(op2);
+ 	} else if (EXPECTED(Z_TYPE_P(op2) == IS_STRING)) {
+ 		op2_str = zend_string_copy(Z_STR_P(op2));
++
+ 	} else {
+ 		if ((IS_TMP_VAR|IS_VAR) == IS_CV && UNEXPECTED(Z_TYPE_P(op2) == IS_UNDEF)) {
+ 			ZVAL_UNDEFINED_OP2();
+ 		}
+ 		op2_str = zval_get_string_func(op2);
+ 	}
++
+ 	do {
+ 		if (IS_CV != IS_CONST) {
+ 			if (UNEXPECTED(ZSTR_LEN(op1_str) == 0)) {
+@@ -45095,6 +45270,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_TMPVAR_HAN
+ 			}
+ 		}
+ 		str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++		if (UNEXPECTED(ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str))) {
++			ZSTR_SET_LITERAL_FAST(str);
++		}
+ 		memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 		memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 		ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -47733,6 +47911,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_CV_HANDLER(ZEND
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str) && !ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
+@@ -47740,6 +47921,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_CV_HANDLER(ZEND
+ 			}
+ 		} else {
+ 			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_SET_LITERAL_FAST(str);
++			}
+ 			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -50103,7 +50287,6 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CV_HANDLER
+ 	zval *op1, *op2;
+ 	zend_string *op1_str, *op2_str, *str;
+ 
+-
+ 	op1 = EX_VAR(opline->op1.var);
+ 	op2 = EX_VAR(opline->op2.var);
+ 	if ((IS_CV == IS_CONST || EXPECTED(Z_TYPE_P(op1) == IS_STRING)) &&
+@@ -50135,6 +50318,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CV_HANDLER
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str) && !ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
+@@ -50142,6 +50328,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CV_HANDLER
+ 			}
+ 		} else {
+ 			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_SET_LITERAL_FAST(str);
++			}
+ 			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -50156,6 +50345,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CV_HANDLER
+ 	}
+ 
+ 	SAVE_OPLINE();
++
+ 	if (IS_CV == IS_CONST) {
+ 		op1_str = Z_STR_P(op1);
+ 	} else if (EXPECTED(Z_TYPE_P(op1) == IS_STRING)) {
+@@ -50170,12 +50360,14 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CV_HANDLER
+ 		op2_str = Z_STR_P(op2);
+ 	} else if (EXPECTED(Z_TYPE_P(op2) == IS_STRING)) {
+ 		op2_str = zend_string_copy(Z_STR_P(op2));
++
+ 	} else {
+ 		if (IS_CV == IS_CV && UNEXPECTED(Z_TYPE_P(op2) == IS_UNDEF)) {
+ 			ZVAL_UNDEFINED_OP2();
+ 		}
+ 		op2_str = zval_get_string_func(op2);
+ 	}
++
+ 	do {
+ 		if (IS_CV != IS_CONST) {
+ 			if (UNEXPECTED(ZSTR_LEN(op1_str) == 0)) {
+@@ -50202,6 +50394,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CV_HANDLER
+ 			}
+ 		}
+ 		str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++		if (UNEXPECTED(ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str))) {
++			ZSTR_SET_LITERAL_FAST(str);
++		}
+ 		memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 		memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 		ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -53541,6 +53736,7 @@ ZEND_API void execute_ex(zend_execute_data *ex)
+ 			(void*)&&ZEND_CHECK_UNDEF_ARGS_SPEC_UNUSED_UNUSED_LABEL,
+ 			(void*)&&ZEND_FETCH_GLOBALS_SPEC_UNUSED_UNUSED_LABEL,
+ 			(void*)&&ZEND_VERIFY_NEVER_TYPE_SPEC_UNUSED_UNUSED_LABEL,
++			(void*)&&ZEND_LITERAL_CHECK_SPEC_UNUSED_LABEL,
+ 			(void*)&&ZEND_RECV_NOTYPE_SPEC_LABEL,
+ 			(void*)&&ZEND_JMP_FORWARD_SPEC_LABEL,
+ 			(void*)&&ZEND_NULL_LABEL,
+@@ -54834,6 +55030,10 @@ ZEND_API void execute_ex(zend_execute_data *ex)
+ 				VM_TRACE(ZEND_INIT_DYNAMIC_CALL_SPEC_TMPVAR)
+ 				ZEND_INIT_DYNAMIC_CALL_SPEC_TMPVAR_HANDLER(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU);
+ 				HYBRID_BREAK();
++			HYBRID_CASE(ZEND_LITERAL_CHECK_SPEC_UNUSED):
++				VM_TRACE(ZEND_LITERAL_CHECK_SPEC_UNUSED)
++				ZEND_LITERAL_CHECK_SPEC_UNUSED_HANDLER(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU);
++				HYBRID_BREAK();
+ 			HYBRID_CASE(ZEND_RECV_SPEC_UNUSED):
+ 				VM_TRACE(ZEND_RECV_SPEC_UNUSED)
+ 				ZEND_RECV_SPEC_UNUSED_HANDLER(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU);
+@@ -61581,6 +61781,7 @@ void zend_vm_init(void)
+ 		ZEND_CHECK_UNDEF_ARGS_SPEC_UNUSED_UNUSED_HANDLER,
+ 		ZEND_FETCH_GLOBALS_SPEC_UNUSED_UNUSED_HANDLER,
+ 		ZEND_VERIFY_NEVER_TYPE_SPEC_UNUSED_UNUSED_HANDLER,
++		ZEND_LITERAL_CHECK_SPEC_UNUSED_HANDLER,
+ 		ZEND_RECV_NOTYPE_SPEC_HANDLER,
+ 		ZEND_JMP_FORWARD_SPEC_HANDLER,
+ 		ZEND_NULL_HANDLER,
+@@ -62689,7 +62890,8 @@ void zend_vm_init(void)
+ 		2546,
+ 		2547,
+ 		2548,
+-		3452
++		2549,
++		3453
+ 	};
+ #if (ZEND_VM_KIND == ZEND_VM_KIND_HYBRID)
+ 	zend_opcode_handler_funcs = labels;
+@@ -62862,7 +63064,7 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 2551 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_COMMUTATIVE;
++				spec = 2552 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_COMMUTATIVE;
+ 				if (op->op1_type < op->op2_type) {
+ 					zend_swap_operands(op);
+ 				}
+@@ -62870,7 +63072,7 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 2576 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_COMMUTATIVE;
++				spec = 2577 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_COMMUTATIVE;
+ 				if (op->op1_type < op->op2_type) {
+ 					zend_swap_operands(op);
+ 				}
+@@ -62878,7 +63080,7 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 2601 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_COMMUTATIVE;
++				spec = 2602 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_COMMUTATIVE;
+ 				if (op->op1_type < op->op2_type) {
+ 					zend_swap_operands(op);
+ 				}
+@@ -62889,17 +63091,17 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 2626 | SPEC_RULE_OP1 | SPEC_RULE_OP2;
++				spec = 2627 | SPEC_RULE_OP1 | SPEC_RULE_OP2;
+ 			} else if (op1_info == MAY_BE_LONG && op2_info == MAY_BE_LONG) {
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 2651 | SPEC_RULE_OP1 | SPEC_RULE_OP2;
++				spec = 2652 | SPEC_RULE_OP1 | SPEC_RULE_OP2;
+ 			} else if (op1_info == MAY_BE_DOUBLE && op2_info == MAY_BE_DOUBLE) {
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 2676 | SPEC_RULE_OP1 | SPEC_RULE_OP2;
++				spec = 2677 | SPEC_RULE_OP1 | SPEC_RULE_OP2;
+ 			}
+ 			break;
+ 		case ZEND_MUL:
+@@ -62910,17 +63112,17 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 2701 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_COMMUTATIVE;
++				spec = 2702 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_COMMUTATIVE;
+ 			} else if (op1_info == MAY_BE_LONG && op2_info == MAY_BE_LONG) {
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 2726 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_COMMUTATIVE;
++				spec = 2727 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_COMMUTATIVE;
+ 			} else if (op1_info == MAY_BE_DOUBLE && op2_info == MAY_BE_DOUBLE) {
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 2751 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_COMMUTATIVE;
++				spec = 2752 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_COMMUTATIVE;
+ 			}
+ 			break;
+ 		case ZEND_IS_IDENTICAL:
+@@ -62931,14 +63133,14 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 2776 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH | SPEC_RULE_COMMUTATIVE;
++				spec = 2777 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH | SPEC_RULE_COMMUTATIVE;
+ 			} else if (op1_info == MAY_BE_DOUBLE && op2_info == MAY_BE_DOUBLE) {
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 2851 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH | SPEC_RULE_COMMUTATIVE;
++				spec = 2852 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH | SPEC_RULE_COMMUTATIVE;
+ 			} else if (op->op1_type == IS_CV && (op->op2_type & (IS_CONST|IS_CV)) && !(op1_info & (MAY_BE_UNDEF|MAY_BE_REF)) && !(op2_info & (MAY_BE_UNDEF|MAY_BE_REF))) {
+-				spec = 3076 | SPEC_RULE_OP2 | SPEC_RULE_COMMUTATIVE;
++				spec = 3077 | SPEC_RULE_OP2 | SPEC_RULE_COMMUTATIVE;
+ 			}
+ 			break;
+ 		case ZEND_IS_NOT_IDENTICAL:
+@@ -62949,14 +63151,14 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 2926 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH | SPEC_RULE_COMMUTATIVE;
++				spec = 2927 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH | SPEC_RULE_COMMUTATIVE;
+ 			} else if (op1_info == MAY_BE_DOUBLE && op2_info == MAY_BE_DOUBLE) {
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 3001 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH | SPEC_RULE_COMMUTATIVE;
++				spec = 3002 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH | SPEC_RULE_COMMUTATIVE;
+ 			} else if (op->op1_type == IS_CV && (op->op2_type & (IS_CONST|IS_CV)) && !(op1_info & (MAY_BE_UNDEF|MAY_BE_REF)) && !(op2_info & (MAY_BE_UNDEF|MAY_BE_REF))) {
+-				spec = 3081 | SPEC_RULE_OP2 | SPEC_RULE_COMMUTATIVE;
++				spec = 3082 | SPEC_RULE_OP2 | SPEC_RULE_COMMUTATIVE;
+ 			}
+ 			break;
+ 		case ZEND_IS_EQUAL:
+@@ -62967,12 +63169,12 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 2776 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH | SPEC_RULE_COMMUTATIVE;
++				spec = 2777 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH | SPEC_RULE_COMMUTATIVE;
+ 			} else if (op1_info == MAY_BE_DOUBLE && op2_info == MAY_BE_DOUBLE) {
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 2851 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH | SPEC_RULE_COMMUTATIVE;
++				spec = 2852 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH | SPEC_RULE_COMMUTATIVE;
+ 			}
+ 			break;
+ 		case ZEND_IS_NOT_EQUAL:
+@@ -62983,12 +63185,12 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 2926 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH | SPEC_RULE_COMMUTATIVE;
++				spec = 2927 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH | SPEC_RULE_COMMUTATIVE;
+ 			} else if (op1_info == MAY_BE_DOUBLE && op2_info == MAY_BE_DOUBLE) {
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 3001 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH | SPEC_RULE_COMMUTATIVE;
++				spec = 3002 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH | SPEC_RULE_COMMUTATIVE;
+ 			}
+ 			break;
+ 		case ZEND_IS_SMALLER:
+@@ -62996,12 +63198,12 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 3086 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH;
++				spec = 3087 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH;
+ 			} else if (op1_info == MAY_BE_DOUBLE && op2_info == MAY_BE_DOUBLE) {
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 3161 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH;
++				spec = 3162 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH;
+ 			}
+ 			break;
+ 		case ZEND_IS_SMALLER_OR_EQUAL:
+@@ -63009,74 +63211,74 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 3236 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH;
++				spec = 3237 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH;
+ 			} else if (op1_info == MAY_BE_DOUBLE && op2_info == MAY_BE_DOUBLE) {
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 3311 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH;
++				spec = 3312 | SPEC_RULE_OP1 | SPEC_RULE_OP2 | SPEC_RULE_SMART_BRANCH;
+ 			}
+ 			break;
+ 		case ZEND_QM_ASSIGN:
+ 			if (op1_info == MAY_BE_LONG) {
+-				spec = 3398 | SPEC_RULE_OP1;
++				spec = 3399 | SPEC_RULE_OP1;
+ 			} else if (op1_info == MAY_BE_DOUBLE) {
+-				spec = 3403 | SPEC_RULE_OP1;
++				spec = 3404 | SPEC_RULE_OP1;
+ 			} else if ((op->op1_type == IS_CONST) ? !Z_REFCOUNTED_P(RT_CONSTANT(op, op->op1)) : (!(op1_info & ((MAY_BE_ANY|MAY_BE_UNDEF)-(MAY_BE_NULL|MAY_BE_FALSE|MAY_BE_TRUE|MAY_BE_LONG|MAY_BE_DOUBLE))))) {
+-				spec = 3408 | SPEC_RULE_OP1;
++				spec = 3409 | SPEC_RULE_OP1;
+ 			}
+ 			break;
+ 		case ZEND_PRE_INC:
+ 			if (res_info == MAY_BE_LONG && op1_info == MAY_BE_LONG) {
+-				spec = 3386 | SPEC_RULE_RETVAL;
++				spec = 3387 | SPEC_RULE_RETVAL;
+ 			} else if (op1_info == MAY_BE_LONG) {
+-				spec = 3388 | SPEC_RULE_RETVAL;
++				spec = 3389 | SPEC_RULE_RETVAL;
+ 			}
+ 			break;
+ 		case ZEND_PRE_DEC:
+ 			if (res_info == MAY_BE_LONG && op1_info == MAY_BE_LONG) {
+-				spec = 3390 | SPEC_RULE_RETVAL;
++				spec = 3391 | SPEC_RULE_RETVAL;
+ 			} else if (op1_info == MAY_BE_LONG) {
+-				spec = 3392 | SPEC_RULE_RETVAL;
++				spec = 3393 | SPEC_RULE_RETVAL;
+ 			}
+ 			break;
+ 		case ZEND_POST_INC:
+ 			if (res_info == MAY_BE_LONG && op1_info == MAY_BE_LONG) {
+-				spec = 3394;
+-			} else if (op1_info == MAY_BE_LONG) {
+ 				spec = 3395;
++			} else if (op1_info == MAY_BE_LONG) {
++				spec = 3396;
+ 			}
+ 			break;
+ 		case ZEND_POST_DEC:
+ 			if (res_info == MAY_BE_LONG && op1_info == MAY_BE_LONG) {
+-				spec = 3396;
+-			} else if (op1_info == MAY_BE_LONG) {
+ 				spec = 3397;
++			} else if (op1_info == MAY_BE_LONG) {
++				spec = 3398;
+ 			}
+ 			break;
+ 		case ZEND_JMP:
+ 			if (OP_JMP_ADDR(op, op->op1) > op) {
+-				spec = 2550;
++				spec = 2551;
+ 			}
+ 			break;
+ 		case ZEND_RECV:
+ 			if (op->op2.num == MAY_BE_ANY) {
+-				spec = 2549;
++				spec = 2550;
+ 			}
+ 			break;
+ 		case ZEND_SEND_VAL:
+ 			if (op->op1_type == IS_CONST && op->op2_type == IS_UNUSED && !Z_REFCOUNTED_P(RT_CONSTANT(op, op->op1))) {
+-				spec = 3448;
++				spec = 3449;
+ 			}
+ 			break;
+ 		case ZEND_SEND_VAR_EX:
+ 			if (op->op2_type == IS_UNUSED && op->op2.num <= MAX_ARG_FLAG_NUM && (op1_info & (MAY_BE_UNDEF|MAY_BE_REF)) == 0) {
+-				spec = 3443 | SPEC_RULE_OP1;
++				spec = 3444 | SPEC_RULE_OP1;
+ 			}
+ 			break;
+ 		case ZEND_FE_FETCH_R:
+ 			if (op->op2_type == IS_CV && (op1_info & (MAY_BE_ANY|MAY_BE_REF)) == MAY_BE_ARRAY) {
+-				spec = 3450 | SPEC_RULE_RETVAL;
++				spec = 3451 | SPEC_RULE_RETVAL;
+ 			}
+ 			break;
+ 		case ZEND_FETCH_DIM_R:
+@@ -63084,17 +63286,17 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+ 				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
+ 					break;
+ 				}
+-				spec = 3413 | SPEC_RULE_OP1 | SPEC_RULE_OP2;
++				spec = 3414 | SPEC_RULE_OP1 | SPEC_RULE_OP2;
+ 			}
+ 			break;
+ 		case ZEND_SEND_VAL_EX:
+ 			if (op->op2_type == IS_UNUSED && op->op2.num <= MAX_ARG_FLAG_NUM && op->op1_type == IS_CONST && !Z_REFCOUNTED_P(RT_CONSTANT(op, op->op1))) {
+-				spec = 3449;
++				spec = 3450;
+ 			}
+ 			break;
+ 		case ZEND_SEND_VAR:
+ 			if (op->op2_type == IS_UNUSED && (op1_info & (MAY_BE_UNDEF|MAY_BE_REF)) == 0) {
+-				spec = 3438 | SPEC_RULE_OP1;
++				spec = 3439 | SPEC_RULE_OP1;
+ 			}
+ 			break;
+ 		case ZEND_BW_OR:
+diff --git a/Zend/zend_vm_handlers.h b/Zend/zend_vm_handlers.h
+index 8e500da57cbf3..2a1bec8e2e7d2 100644
+--- a/Zend/zend_vm_handlers.h
++++ b/Zend/zend_vm_handlers.h
+@@ -1354,498 +1354,499 @@
+ 	_(2546, ZEND_CHECK_UNDEF_ARGS_SPEC_UNUSED_UNUSED) \
+ 	_(2547, ZEND_FETCH_GLOBALS_SPEC_UNUSED_UNUSED) \
+ 	_(2548, ZEND_VERIFY_NEVER_TYPE_SPEC_UNUSED_UNUSED) \
+-	_(2549, ZEND_RECV_NOTYPE_SPEC) \
+-	_(2550, ZEND_JMP_FORWARD_SPEC) \
+-	_(2556, ZEND_ADD_LONG_NO_OVERFLOW_SPEC_TMPVARCV_CONST) \
+-	_(2557, ZEND_ADD_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2549, ZEND_LITERAL_CHECK_SPEC_UNUSED) \
++	_(2550, ZEND_RECV_NOTYPE_SPEC) \
++	_(2551, ZEND_JMP_FORWARD_SPEC) \
++	_(2557, ZEND_ADD_LONG_NO_OVERFLOW_SPEC_TMPVARCV_CONST) \
+ 	_(2558, ZEND_ADD_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2560, ZEND_ADD_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2561, ZEND_ADD_LONG_NO_OVERFLOW_SPEC_TMPVARCV_CONST) \
+-	_(2562, ZEND_ADD_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2559, ZEND_ADD_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2561, ZEND_ADD_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2562, ZEND_ADD_LONG_NO_OVERFLOW_SPEC_TMPVARCV_CONST) \
+ 	_(2563, ZEND_ADD_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2565, ZEND_ADD_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2571, ZEND_ADD_LONG_NO_OVERFLOW_SPEC_TMPVARCV_CONST) \
+-	_(2572, ZEND_ADD_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2564, ZEND_ADD_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2566, ZEND_ADD_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2572, ZEND_ADD_LONG_NO_OVERFLOW_SPEC_TMPVARCV_CONST) \
+ 	_(2573, ZEND_ADD_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2575, ZEND_ADD_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2581, ZEND_ADD_LONG_SPEC_TMPVARCV_CONST) \
+-	_(2582, ZEND_ADD_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2574, ZEND_ADD_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2576, ZEND_ADD_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2582, ZEND_ADD_LONG_SPEC_TMPVARCV_CONST) \
+ 	_(2583, ZEND_ADD_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2585, ZEND_ADD_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2586, ZEND_ADD_LONG_SPEC_TMPVARCV_CONST) \
+-	_(2587, ZEND_ADD_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2584, ZEND_ADD_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2586, ZEND_ADD_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2587, ZEND_ADD_LONG_SPEC_TMPVARCV_CONST) \
+ 	_(2588, ZEND_ADD_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2590, ZEND_ADD_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2596, ZEND_ADD_LONG_SPEC_TMPVARCV_CONST) \
+-	_(2597, ZEND_ADD_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2589, ZEND_ADD_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2591, ZEND_ADD_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2597, ZEND_ADD_LONG_SPEC_TMPVARCV_CONST) \
+ 	_(2598, ZEND_ADD_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2600, ZEND_ADD_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2606, ZEND_ADD_DOUBLE_SPEC_TMPVARCV_CONST) \
+-	_(2607, ZEND_ADD_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2599, ZEND_ADD_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2601, ZEND_ADD_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2607, ZEND_ADD_DOUBLE_SPEC_TMPVARCV_CONST) \
+ 	_(2608, ZEND_ADD_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2610, ZEND_ADD_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2611, ZEND_ADD_DOUBLE_SPEC_TMPVARCV_CONST) \
+-	_(2612, ZEND_ADD_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2609, ZEND_ADD_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2611, ZEND_ADD_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2612, ZEND_ADD_DOUBLE_SPEC_TMPVARCV_CONST) \
+ 	_(2613, ZEND_ADD_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2615, ZEND_ADD_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2621, ZEND_ADD_DOUBLE_SPEC_TMPVARCV_CONST) \
+-	_(2622, ZEND_ADD_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2614, ZEND_ADD_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2616, ZEND_ADD_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2622, ZEND_ADD_DOUBLE_SPEC_TMPVARCV_CONST) \
+ 	_(2623, ZEND_ADD_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2625, ZEND_ADD_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2627, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_CONST_TMPVARCV) \
++	_(2624, ZEND_ADD_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2626, ZEND_ADD_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+ 	_(2628, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_CONST_TMPVARCV) \
+-	_(2630, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_CONST_TMPVARCV) \
+-	_(2631, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_TMPVARCV_CONST) \
+-	_(2632, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2629, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_CONST_TMPVARCV) \
++	_(2631, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_CONST_TMPVARCV) \
++	_(2632, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_TMPVARCV_CONST) \
+ 	_(2633, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2635, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2636, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_TMPVARCV_CONST) \
+-	_(2637, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2634, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2636, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2637, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_TMPVARCV_CONST) \
+ 	_(2638, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2640, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2646, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_TMPVARCV_CONST) \
+-	_(2647, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2639, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2641, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2647, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_TMPVARCV_CONST) \
+ 	_(2648, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2650, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2652, ZEND_SUB_LONG_SPEC_CONST_TMPVARCV) \
++	_(2649, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2651, ZEND_SUB_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
+ 	_(2653, ZEND_SUB_LONG_SPEC_CONST_TMPVARCV) \
+-	_(2655, ZEND_SUB_LONG_SPEC_CONST_TMPVARCV) \
+-	_(2656, ZEND_SUB_LONG_SPEC_TMPVARCV_CONST) \
+-	_(2657, ZEND_SUB_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2654, ZEND_SUB_LONG_SPEC_CONST_TMPVARCV) \
++	_(2656, ZEND_SUB_LONG_SPEC_CONST_TMPVARCV) \
++	_(2657, ZEND_SUB_LONG_SPEC_TMPVARCV_CONST) \
+ 	_(2658, ZEND_SUB_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2660, ZEND_SUB_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2661, ZEND_SUB_LONG_SPEC_TMPVARCV_CONST) \
+-	_(2662, ZEND_SUB_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2659, ZEND_SUB_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2661, ZEND_SUB_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2662, ZEND_SUB_LONG_SPEC_TMPVARCV_CONST) \
+ 	_(2663, ZEND_SUB_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2665, ZEND_SUB_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2671, ZEND_SUB_LONG_SPEC_TMPVARCV_CONST) \
+-	_(2672, ZEND_SUB_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2664, ZEND_SUB_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2666, ZEND_SUB_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2672, ZEND_SUB_LONG_SPEC_TMPVARCV_CONST) \
+ 	_(2673, ZEND_SUB_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2675, ZEND_SUB_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2677, ZEND_SUB_DOUBLE_SPEC_CONST_TMPVARCV) \
++	_(2674, ZEND_SUB_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2676, ZEND_SUB_LONG_SPEC_TMPVARCV_TMPVARCV) \
+ 	_(2678, ZEND_SUB_DOUBLE_SPEC_CONST_TMPVARCV) \
+-	_(2680, ZEND_SUB_DOUBLE_SPEC_CONST_TMPVARCV) \
+-	_(2681, ZEND_SUB_DOUBLE_SPEC_TMPVARCV_CONST) \
+-	_(2682, ZEND_SUB_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2679, ZEND_SUB_DOUBLE_SPEC_CONST_TMPVARCV) \
++	_(2681, ZEND_SUB_DOUBLE_SPEC_CONST_TMPVARCV) \
++	_(2682, ZEND_SUB_DOUBLE_SPEC_TMPVARCV_CONST) \
+ 	_(2683, ZEND_SUB_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2685, ZEND_SUB_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2686, ZEND_SUB_DOUBLE_SPEC_TMPVARCV_CONST) \
+-	_(2687, ZEND_SUB_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2684, ZEND_SUB_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2686, ZEND_SUB_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2687, ZEND_SUB_DOUBLE_SPEC_TMPVARCV_CONST) \
+ 	_(2688, ZEND_SUB_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2690, ZEND_SUB_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2696, ZEND_SUB_DOUBLE_SPEC_TMPVARCV_CONST) \
+-	_(2697, ZEND_SUB_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2689, ZEND_SUB_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2691, ZEND_SUB_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2697, ZEND_SUB_DOUBLE_SPEC_TMPVARCV_CONST) \
+ 	_(2698, ZEND_SUB_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2700, ZEND_SUB_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2706, ZEND_MUL_LONG_NO_OVERFLOW_SPEC_TMPVARCV_CONST) \
+-	_(2707, ZEND_MUL_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2699, ZEND_SUB_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2701, ZEND_SUB_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2707, ZEND_MUL_LONG_NO_OVERFLOW_SPEC_TMPVARCV_CONST) \
+ 	_(2708, ZEND_MUL_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2710, ZEND_MUL_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2711, ZEND_MUL_LONG_NO_OVERFLOW_SPEC_TMPVARCV_CONST) \
+-	_(2712, ZEND_MUL_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2709, ZEND_MUL_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2711, ZEND_MUL_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2712, ZEND_MUL_LONG_NO_OVERFLOW_SPEC_TMPVARCV_CONST) \
+ 	_(2713, ZEND_MUL_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2715, ZEND_MUL_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2721, ZEND_MUL_LONG_NO_OVERFLOW_SPEC_TMPVARCV_CONST) \
+-	_(2722, ZEND_MUL_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2714, ZEND_MUL_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2716, ZEND_MUL_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2722, ZEND_MUL_LONG_NO_OVERFLOW_SPEC_TMPVARCV_CONST) \
+ 	_(2723, ZEND_MUL_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2725, ZEND_MUL_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2731, ZEND_MUL_LONG_SPEC_TMPVARCV_CONST) \
+-	_(2732, ZEND_MUL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2724, ZEND_MUL_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2726, ZEND_MUL_LONG_NO_OVERFLOW_SPEC_TMPVARCV_TMPVARCV) \
++	_(2732, ZEND_MUL_LONG_SPEC_TMPVARCV_CONST) \
+ 	_(2733, ZEND_MUL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2735, ZEND_MUL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2736, ZEND_MUL_LONG_SPEC_TMPVARCV_CONST) \
+-	_(2737, ZEND_MUL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2734, ZEND_MUL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2736, ZEND_MUL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2737, ZEND_MUL_LONG_SPEC_TMPVARCV_CONST) \
+ 	_(2738, ZEND_MUL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2740, ZEND_MUL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2746, ZEND_MUL_LONG_SPEC_TMPVARCV_CONST) \
+-	_(2747, ZEND_MUL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2739, ZEND_MUL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2741, ZEND_MUL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2747, ZEND_MUL_LONG_SPEC_TMPVARCV_CONST) \
+ 	_(2748, ZEND_MUL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2750, ZEND_MUL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2756, ZEND_MUL_DOUBLE_SPEC_TMPVARCV_CONST) \
+-	_(2757, ZEND_MUL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2749, ZEND_MUL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2751, ZEND_MUL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2757, ZEND_MUL_DOUBLE_SPEC_TMPVARCV_CONST) \
+ 	_(2758, ZEND_MUL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2760, ZEND_MUL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2761, ZEND_MUL_DOUBLE_SPEC_TMPVARCV_CONST) \
+-	_(2762, ZEND_MUL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2759, ZEND_MUL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2761, ZEND_MUL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2762, ZEND_MUL_DOUBLE_SPEC_TMPVARCV_CONST) \
+ 	_(2763, ZEND_MUL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2765, ZEND_MUL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2771, ZEND_MUL_DOUBLE_SPEC_TMPVARCV_CONST) \
+-	_(2772, ZEND_MUL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2764, ZEND_MUL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2766, ZEND_MUL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2772, ZEND_MUL_DOUBLE_SPEC_TMPVARCV_CONST) \
+ 	_(2773, ZEND_MUL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2775, ZEND_MUL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2791, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_CONST) \
+-	_(2792, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(2793, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(2794, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2795, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2796, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2797, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2798, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2799, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2803, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2804, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2805, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2806, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_CONST) \
+-	_(2807, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(2808, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(2809, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2810, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2811, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2812, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2813, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2814, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2818, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2819, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2820, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2836, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_CONST) \
+-	_(2837, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(2838, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(2839, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2840, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2841, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2842, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2843, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2844, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2848, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2849, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2850, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2866, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST) \
+-	_(2867, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(2868, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(2869, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2870, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2871, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2872, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2873, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2874, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2878, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2879, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2880, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2881, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST) \
+-	_(2882, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(2883, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(2884, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2885, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2886, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2887, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2888, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2889, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2893, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2894, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2895, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2911, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST) \
+-	_(2912, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(2913, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(2914, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2915, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2916, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2917, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2918, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2919, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2923, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2924, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2925, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2941, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_CONST) \
+-	_(2942, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(2943, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(2944, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2945, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2946, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2947, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2948, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2949, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2953, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2954, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2955, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2956, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_CONST) \
+-	_(2957, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(2958, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(2959, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2960, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2961, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2962, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2963, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2964, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2968, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2969, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2970, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2986, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_CONST) \
+-	_(2987, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(2988, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(2989, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2990, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2991, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2992, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2993, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(2994, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(2998, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(2999, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3000, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3016, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST) \
+-	_(3017, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(3018, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(3019, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3020, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3021, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3022, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3023, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3024, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3028, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3029, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3030, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3031, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST) \
+-	_(3032, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(3033, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(3034, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3035, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3036, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3037, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3038, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3039, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3043, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3044, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3045, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3061, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST) \
+-	_(3062, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(3063, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(3064, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3065, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3066, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3067, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3068, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3069, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3073, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3074, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3075, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3076, ZEND_IS_IDENTICAL_NOTHROW_SPEC_CV_CONST) \
+-	_(3080, ZEND_IS_IDENTICAL_NOTHROW_SPEC_CV_CV) \
+-	_(3081, ZEND_IS_NOT_IDENTICAL_NOTHROW_SPEC_CV_CONST) \
+-	_(3085, ZEND_IS_NOT_IDENTICAL_NOTHROW_SPEC_CV_CV) \
+-	_(3089, ZEND_IS_SMALLER_LONG_SPEC_CONST_TMPVARCV) \
+-	_(3090, ZEND_IS_SMALLER_LONG_SPEC_CONST_TMPVARCV_JMPZ) \
+-	_(3091, ZEND_IS_SMALLER_LONG_SPEC_CONST_TMPVARCV_JMPNZ) \
+-	_(3092, ZEND_IS_SMALLER_LONG_SPEC_CONST_TMPVARCV) \
+-	_(3093, ZEND_IS_SMALLER_LONG_SPEC_CONST_TMPVARCV_JMPZ) \
+-	_(3094, ZEND_IS_SMALLER_LONG_SPEC_CONST_TMPVARCV_JMPNZ) \
+-	_(3098, ZEND_IS_SMALLER_LONG_SPEC_CONST_TMPVARCV) \
+-	_(3099, ZEND_IS_SMALLER_LONG_SPEC_CONST_TMPVARCV_JMPZ) \
+-	_(3100, ZEND_IS_SMALLER_LONG_SPEC_CONST_TMPVARCV_JMPNZ) \
+-	_(3101, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_CONST) \
+-	_(3102, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(3103, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(3104, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3105, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3106, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3107, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3108, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3109, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3113, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3114, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3115, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3116, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_CONST) \
+-	_(3117, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(3118, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(3119, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3120, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3121, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3122, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3123, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3124, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3128, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3129, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3130, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3146, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_CONST) \
+-	_(3147, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(3148, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(3149, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3150, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3151, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3152, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3153, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3154, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3158, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3159, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3160, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3164, ZEND_IS_SMALLER_DOUBLE_SPEC_CONST_TMPVARCV) \
+-	_(3165, ZEND_IS_SMALLER_DOUBLE_SPEC_CONST_TMPVARCV_JMPZ) \
+-	_(3166, ZEND_IS_SMALLER_DOUBLE_SPEC_CONST_TMPVARCV_JMPNZ) \
+-	_(3167, ZEND_IS_SMALLER_DOUBLE_SPEC_CONST_TMPVARCV) \
+-	_(3168, ZEND_IS_SMALLER_DOUBLE_SPEC_CONST_TMPVARCV_JMPZ) \
+-	_(3169, ZEND_IS_SMALLER_DOUBLE_SPEC_CONST_TMPVARCV_JMPNZ) \
+-	_(3173, ZEND_IS_SMALLER_DOUBLE_SPEC_CONST_TMPVARCV) \
+-	_(3174, ZEND_IS_SMALLER_DOUBLE_SPEC_CONST_TMPVARCV_JMPZ) \
+-	_(3175, ZEND_IS_SMALLER_DOUBLE_SPEC_CONST_TMPVARCV_JMPNZ) \
+-	_(3176, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_CONST) \
+-	_(3177, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(3178, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(3179, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3180, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3181, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3182, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3183, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3184, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3188, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3189, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3190, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3191, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_CONST) \
+-	_(3192, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(3193, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(3194, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3195, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3196, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3197, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3198, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3199, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3203, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3204, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3205, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3221, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_CONST) \
+-	_(3222, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(3223, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(3224, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3225, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3226, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3227, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3228, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3229, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3233, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3234, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3235, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3239, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_CONST_TMPVARCV) \
+-	_(3240, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_CONST_TMPVARCV_JMPZ) \
+-	_(3241, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_CONST_TMPVARCV_JMPNZ) \
+-	_(3242, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_CONST_TMPVARCV) \
+-	_(3243, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_CONST_TMPVARCV_JMPZ) \
+-	_(3244, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_CONST_TMPVARCV_JMPNZ) \
+-	_(3248, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_CONST_TMPVARCV) \
+-	_(3249, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_CONST_TMPVARCV_JMPZ) \
+-	_(3250, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_CONST_TMPVARCV_JMPNZ) \
+-	_(3251, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_CONST) \
+-	_(3252, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(3253, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(3254, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3255, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3256, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3257, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3258, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3259, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3263, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3264, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3265, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3266, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_CONST) \
+-	_(3267, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(3268, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(3269, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3270, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3271, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3272, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3273, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3274, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3278, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3279, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3280, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3296, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_CONST) \
+-	_(3297, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(3298, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(3299, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3300, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3301, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3302, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3303, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3304, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3308, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3309, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3310, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3314, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_CONST_TMPVARCV) \
+-	_(3315, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_CONST_TMPVARCV_JMPZ) \
+-	_(3316, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_CONST_TMPVARCV_JMPNZ) \
+-	_(3317, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_CONST_TMPVARCV) \
+-	_(3318, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_CONST_TMPVARCV_JMPZ) \
+-	_(3319, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_CONST_TMPVARCV_JMPNZ) \
+-	_(3323, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_CONST_TMPVARCV) \
+-	_(3324, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_CONST_TMPVARCV_JMPZ) \
+-	_(3325, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_CONST_TMPVARCV_JMPNZ) \
+-	_(3326, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST) \
+-	_(3327, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(3328, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(3329, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3330, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3331, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3332, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3333, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3334, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3338, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3339, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3340, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3341, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST) \
+-	_(3342, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(3343, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(3344, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3345, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3346, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3347, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3348, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3349, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3353, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3354, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3355, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3371, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST) \
+-	_(3372, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
+-	_(3373, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
+-	_(3374, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3375, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3376, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3377, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3378, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3379, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3383, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
+-	_(3384, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
+-	_(3385, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
+-	_(3386, ZEND_PRE_INC_LONG_NO_OVERFLOW_SPEC_CV_RETVAL_UNUSED) \
+-	_(3387, ZEND_PRE_INC_LONG_NO_OVERFLOW_SPEC_CV_RETVAL_USED) \
+-	_(3388, ZEND_PRE_INC_LONG_SPEC_CV_RETVAL_UNUSED) \
+-	_(3389, ZEND_PRE_INC_LONG_SPEC_CV_RETVAL_USED) \
+-	_(3390, ZEND_PRE_DEC_LONG_NO_OVERFLOW_SPEC_CV_RETVAL_UNUSED) \
+-	_(3391, ZEND_PRE_DEC_LONG_NO_OVERFLOW_SPEC_CV_RETVAL_USED) \
+-	_(3392, ZEND_PRE_DEC_LONG_SPEC_CV_RETVAL_UNUSED) \
+-	_(3393, ZEND_PRE_DEC_LONG_SPEC_CV_RETVAL_USED) \
+-	_(3394, ZEND_POST_INC_LONG_NO_OVERFLOW_SPEC_CV) \
+-	_(3395, ZEND_POST_INC_LONG_SPEC_CV) \
+-	_(3396, ZEND_POST_DEC_LONG_NO_OVERFLOW_SPEC_CV) \
+-	_(3397, ZEND_POST_DEC_LONG_SPEC_CV) \
+-	_(3398, ZEND_QM_ASSIGN_LONG_SPEC_CONST) \
+-	_(3399, ZEND_QM_ASSIGN_LONG_SPEC_TMPVARCV) \
++	_(2774, ZEND_MUL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2776, ZEND_MUL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2792, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_CONST) \
++	_(2793, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(2794, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(2795, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2796, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2797, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2798, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2799, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2800, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2804, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2805, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2806, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2807, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_CONST) \
++	_(2808, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(2809, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(2810, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2811, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2812, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2813, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2814, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2815, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2819, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2820, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2821, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2837, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_CONST) \
++	_(2838, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(2839, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(2840, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2841, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2842, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2843, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2844, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2845, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2849, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2850, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2851, ZEND_IS_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2867, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST) \
++	_(2868, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(2869, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(2870, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2871, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2872, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2873, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2874, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2875, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2879, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2880, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2881, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2882, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST) \
++	_(2883, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(2884, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(2885, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2886, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2887, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2888, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2889, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2890, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2894, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2895, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2896, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2912, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST) \
++	_(2913, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(2914, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(2915, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2916, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2917, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2918, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2919, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2920, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2924, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(2925, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2926, ZEND_IS_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2942, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_CONST) \
++	_(2943, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(2944, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(2945, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2946, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2947, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2948, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2949, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2950, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2954, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2955, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2956, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2957, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_CONST) \
++	_(2958, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(2959, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(2960, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2961, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2962, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2963, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2964, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2965, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2969, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2970, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2971, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2987, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_CONST) \
++	_(2988, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(2989, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(2990, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2991, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2992, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2993, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(2994, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(2995, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(2999, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(3000, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3001, ZEND_IS_NOT_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3017, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST) \
++	_(3018, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(3019, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(3020, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3021, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3022, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3023, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3024, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3025, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3029, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3030, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3031, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3032, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST) \
++	_(3033, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(3034, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(3035, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3036, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3037, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3038, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3039, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3040, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3044, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3045, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3046, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3062, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST) \
++	_(3063, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(3064, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(3065, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3066, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3067, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3068, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3069, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3070, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3074, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3075, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3076, ZEND_IS_NOT_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3077, ZEND_IS_IDENTICAL_NOTHROW_SPEC_CV_CONST) \
++	_(3081, ZEND_IS_IDENTICAL_NOTHROW_SPEC_CV_CV) \
++	_(3082, ZEND_IS_NOT_IDENTICAL_NOTHROW_SPEC_CV_CONST) \
++	_(3086, ZEND_IS_NOT_IDENTICAL_NOTHROW_SPEC_CV_CV) \
++	_(3090, ZEND_IS_SMALLER_LONG_SPEC_CONST_TMPVARCV) \
++	_(3091, ZEND_IS_SMALLER_LONG_SPEC_CONST_TMPVARCV_JMPZ) \
++	_(3092, ZEND_IS_SMALLER_LONG_SPEC_CONST_TMPVARCV_JMPNZ) \
++	_(3093, ZEND_IS_SMALLER_LONG_SPEC_CONST_TMPVARCV) \
++	_(3094, ZEND_IS_SMALLER_LONG_SPEC_CONST_TMPVARCV_JMPZ) \
++	_(3095, ZEND_IS_SMALLER_LONG_SPEC_CONST_TMPVARCV_JMPNZ) \
++	_(3099, ZEND_IS_SMALLER_LONG_SPEC_CONST_TMPVARCV) \
++	_(3100, ZEND_IS_SMALLER_LONG_SPEC_CONST_TMPVARCV_JMPZ) \
++	_(3101, ZEND_IS_SMALLER_LONG_SPEC_CONST_TMPVARCV_JMPNZ) \
++	_(3102, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_CONST) \
++	_(3103, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(3104, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(3105, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(3106, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3107, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3108, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(3109, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3110, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3114, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(3115, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3116, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3117, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_CONST) \
++	_(3118, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(3119, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(3120, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(3121, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3122, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3123, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(3124, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3125, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3129, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(3130, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3131, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3147, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_CONST) \
++	_(3148, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(3149, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(3150, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(3151, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3152, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3153, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(3154, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3155, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3159, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(3160, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3161, ZEND_IS_SMALLER_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3165, ZEND_IS_SMALLER_DOUBLE_SPEC_CONST_TMPVARCV) \
++	_(3166, ZEND_IS_SMALLER_DOUBLE_SPEC_CONST_TMPVARCV_JMPZ) \
++	_(3167, ZEND_IS_SMALLER_DOUBLE_SPEC_CONST_TMPVARCV_JMPNZ) \
++	_(3168, ZEND_IS_SMALLER_DOUBLE_SPEC_CONST_TMPVARCV) \
++	_(3169, ZEND_IS_SMALLER_DOUBLE_SPEC_CONST_TMPVARCV_JMPZ) \
++	_(3170, ZEND_IS_SMALLER_DOUBLE_SPEC_CONST_TMPVARCV_JMPNZ) \
++	_(3174, ZEND_IS_SMALLER_DOUBLE_SPEC_CONST_TMPVARCV) \
++	_(3175, ZEND_IS_SMALLER_DOUBLE_SPEC_CONST_TMPVARCV_JMPZ) \
++	_(3176, ZEND_IS_SMALLER_DOUBLE_SPEC_CONST_TMPVARCV_JMPNZ) \
++	_(3177, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_CONST) \
++	_(3178, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(3179, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(3180, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3181, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3182, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3183, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3184, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3185, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3189, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3190, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3191, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3192, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_CONST) \
++	_(3193, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(3194, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(3195, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3196, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3197, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3198, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3199, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3200, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3204, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3205, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3206, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3222, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_CONST) \
++	_(3223, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(3224, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(3225, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3226, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3227, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3228, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3229, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3230, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3234, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3235, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3236, ZEND_IS_SMALLER_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3240, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_CONST_TMPVARCV) \
++	_(3241, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_CONST_TMPVARCV_JMPZ) \
++	_(3242, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_CONST_TMPVARCV_JMPNZ) \
++	_(3243, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_CONST_TMPVARCV) \
++	_(3244, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_CONST_TMPVARCV_JMPZ) \
++	_(3245, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_CONST_TMPVARCV_JMPNZ) \
++	_(3249, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_CONST_TMPVARCV) \
++	_(3250, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_CONST_TMPVARCV_JMPZ) \
++	_(3251, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_CONST_TMPVARCV_JMPNZ) \
++	_(3252, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_CONST) \
++	_(3253, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(3254, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(3255, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(3256, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3257, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3258, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(3259, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3260, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3264, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(3265, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3266, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3267, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_CONST) \
++	_(3268, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(3269, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(3270, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(3271, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3272, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3273, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(3274, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3275, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3279, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(3280, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3281, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3297, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_CONST) \
++	_(3298, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(3299, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(3300, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(3301, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3302, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3303, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(3304, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3305, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3309, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV) \
++	_(3310, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3311, ZEND_IS_SMALLER_OR_EQUAL_LONG_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3315, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_CONST_TMPVARCV) \
++	_(3316, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_CONST_TMPVARCV_JMPZ) \
++	_(3317, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_CONST_TMPVARCV_JMPNZ) \
++	_(3318, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_CONST_TMPVARCV) \
++	_(3319, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_CONST_TMPVARCV_JMPZ) \
++	_(3320, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_CONST_TMPVARCV_JMPNZ) \
++	_(3324, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_CONST_TMPVARCV) \
++	_(3325, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_CONST_TMPVARCV_JMPZ) \
++	_(3326, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_CONST_TMPVARCV_JMPNZ) \
++	_(3327, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST) \
++	_(3328, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(3329, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(3330, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3331, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3332, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3333, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3334, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3335, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3339, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3340, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3341, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3342, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST) \
++	_(3343, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(3344, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(3345, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3346, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3347, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3348, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3349, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3350, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3354, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3355, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3356, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3372, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST) \
++	_(3373, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPZ) \
++	_(3374, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_CONST_JMPNZ) \
++	_(3375, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3376, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3377, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3378, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3379, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3380, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3384, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV) \
++	_(3385, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPZ) \
++	_(3386, ZEND_IS_SMALLER_OR_EQUAL_DOUBLE_SPEC_TMPVARCV_TMPVARCV_JMPNZ) \
++	_(3387, ZEND_PRE_INC_LONG_NO_OVERFLOW_SPEC_CV_RETVAL_UNUSED) \
++	_(3388, ZEND_PRE_INC_LONG_NO_OVERFLOW_SPEC_CV_RETVAL_USED) \
++	_(3389, ZEND_PRE_INC_LONG_SPEC_CV_RETVAL_UNUSED) \
++	_(3390, ZEND_PRE_INC_LONG_SPEC_CV_RETVAL_USED) \
++	_(3391, ZEND_PRE_DEC_LONG_NO_OVERFLOW_SPEC_CV_RETVAL_UNUSED) \
++	_(3392, ZEND_PRE_DEC_LONG_NO_OVERFLOW_SPEC_CV_RETVAL_USED) \
++	_(3393, ZEND_PRE_DEC_LONG_SPEC_CV_RETVAL_UNUSED) \
++	_(3394, ZEND_PRE_DEC_LONG_SPEC_CV_RETVAL_USED) \
++	_(3395, ZEND_POST_INC_LONG_NO_OVERFLOW_SPEC_CV) \
++	_(3396, ZEND_POST_INC_LONG_SPEC_CV) \
++	_(3397, ZEND_POST_DEC_LONG_NO_OVERFLOW_SPEC_CV) \
++	_(3398, ZEND_POST_DEC_LONG_SPEC_CV) \
++	_(3399, ZEND_QM_ASSIGN_LONG_SPEC_CONST) \
+ 	_(3400, ZEND_QM_ASSIGN_LONG_SPEC_TMPVARCV) \
+-	_(3402, ZEND_QM_ASSIGN_LONG_SPEC_TMPVARCV) \
+-	_(3403, ZEND_QM_ASSIGN_DOUBLE_SPEC_CONST) \
+-	_(3404, ZEND_QM_ASSIGN_DOUBLE_SPEC_TMPVARCV) \
++	_(3401, ZEND_QM_ASSIGN_LONG_SPEC_TMPVARCV) \
++	_(3403, ZEND_QM_ASSIGN_LONG_SPEC_TMPVARCV) \
++	_(3404, ZEND_QM_ASSIGN_DOUBLE_SPEC_CONST) \
+ 	_(3405, ZEND_QM_ASSIGN_DOUBLE_SPEC_TMPVARCV) \
+-	_(3407, ZEND_QM_ASSIGN_DOUBLE_SPEC_TMPVARCV) \
+-	_(3408, ZEND_QM_ASSIGN_NOREF_SPEC_CONST) \
+-	_(3409, ZEND_QM_ASSIGN_NOREF_SPEC_TMPVARCV) \
++	_(3406, ZEND_QM_ASSIGN_DOUBLE_SPEC_TMPVARCV) \
++	_(3408, ZEND_QM_ASSIGN_DOUBLE_SPEC_TMPVARCV) \
++	_(3409, ZEND_QM_ASSIGN_NOREF_SPEC_CONST) \
+ 	_(3410, ZEND_QM_ASSIGN_NOREF_SPEC_TMPVARCV) \
+-	_(3412, ZEND_QM_ASSIGN_NOREF_SPEC_TMPVARCV) \
+-	_(3414, ZEND_FETCH_DIM_R_INDEX_SPEC_CONST_TMPVARCV) \
++	_(3411, ZEND_QM_ASSIGN_NOREF_SPEC_TMPVARCV) \
++	_(3413, ZEND_QM_ASSIGN_NOREF_SPEC_TMPVARCV) \
+ 	_(3415, ZEND_FETCH_DIM_R_INDEX_SPEC_CONST_TMPVARCV) \
+-	_(3417, ZEND_FETCH_DIM_R_INDEX_SPEC_CONST_TMPVARCV) \
+-	_(3418, ZEND_FETCH_DIM_R_INDEX_SPEC_TMPVAR_CONST) \
+-	_(3419, ZEND_FETCH_DIM_R_INDEX_SPEC_TMPVAR_TMPVARCV) \
++	_(3416, ZEND_FETCH_DIM_R_INDEX_SPEC_CONST_TMPVARCV) \
++	_(3418, ZEND_FETCH_DIM_R_INDEX_SPEC_CONST_TMPVARCV) \
++	_(3419, ZEND_FETCH_DIM_R_INDEX_SPEC_TMPVAR_CONST) \
+ 	_(3420, ZEND_FETCH_DIM_R_INDEX_SPEC_TMPVAR_TMPVARCV) \
+-	_(3422, ZEND_FETCH_DIM_R_INDEX_SPEC_TMPVAR_TMPVARCV) \
+-	_(3423, ZEND_FETCH_DIM_R_INDEX_SPEC_TMPVAR_CONST) \
+-	_(3424, ZEND_FETCH_DIM_R_INDEX_SPEC_TMPVAR_TMPVARCV) \
++	_(3421, ZEND_FETCH_DIM_R_INDEX_SPEC_TMPVAR_TMPVARCV) \
++	_(3423, ZEND_FETCH_DIM_R_INDEX_SPEC_TMPVAR_TMPVARCV) \
++	_(3424, ZEND_FETCH_DIM_R_INDEX_SPEC_TMPVAR_CONST) \
+ 	_(3425, ZEND_FETCH_DIM_R_INDEX_SPEC_TMPVAR_TMPVARCV) \
+-	_(3427, ZEND_FETCH_DIM_R_INDEX_SPEC_TMPVAR_TMPVARCV) \
+-	_(3433, ZEND_FETCH_DIM_R_INDEX_SPEC_CV_CONST) \
+-	_(3434, ZEND_FETCH_DIM_R_INDEX_SPEC_CV_TMPVARCV) \
++	_(3426, ZEND_FETCH_DIM_R_INDEX_SPEC_TMPVAR_TMPVARCV) \
++	_(3428, ZEND_FETCH_DIM_R_INDEX_SPEC_TMPVAR_TMPVARCV) \
++	_(3434, ZEND_FETCH_DIM_R_INDEX_SPEC_CV_CONST) \
+ 	_(3435, ZEND_FETCH_DIM_R_INDEX_SPEC_CV_TMPVARCV) \
+-	_(3437, ZEND_FETCH_DIM_R_INDEX_SPEC_CV_TMPVARCV) \
+-	_(3440, ZEND_SEND_VAR_SIMPLE_SPEC_VAR) \
+-	_(3442, ZEND_SEND_VAR_SIMPLE_SPEC_CV) \
+-	_(3445, ZEND_SEND_VAR_EX_SIMPLE_SPEC_VAR_UNUSED) \
+-	_(3447, ZEND_SEND_VAR_EX_SIMPLE_SPEC_CV_UNUSED) \
+-	_(3448, ZEND_SEND_VAL_SIMPLE_SPEC_CONST) \
+-	_(3449, ZEND_SEND_VAL_EX_SIMPLE_SPEC_CONST) \
+-	_(3450, ZEND_FE_FETCH_R_SIMPLE_SPEC_VAR_CV_RETVAL_UNUSED) \
+-	_(3451, ZEND_FE_FETCH_R_SIMPLE_SPEC_VAR_CV_RETVAL_USED) \
+-	_(3451+1, ZEND_NULL)
++	_(3436, ZEND_FETCH_DIM_R_INDEX_SPEC_CV_TMPVARCV) \
++	_(3438, ZEND_FETCH_DIM_R_INDEX_SPEC_CV_TMPVARCV) \
++	_(3441, ZEND_SEND_VAR_SIMPLE_SPEC_VAR) \
++	_(3443, ZEND_SEND_VAR_SIMPLE_SPEC_CV) \
++	_(3446, ZEND_SEND_VAR_EX_SIMPLE_SPEC_VAR_UNUSED) \
++	_(3448, ZEND_SEND_VAR_EX_SIMPLE_SPEC_CV_UNUSED) \
++	_(3449, ZEND_SEND_VAL_SIMPLE_SPEC_CONST) \
++	_(3450, ZEND_SEND_VAL_EX_SIMPLE_SPEC_CONST) \
++	_(3451, ZEND_FE_FETCH_R_SIMPLE_SPEC_VAR_CV_RETVAL_UNUSED) \
++	_(3452, ZEND_FE_FETCH_R_SIMPLE_SPEC_VAR_CV_RETVAL_USED) \
++	_(3452+1, ZEND_NULL)
+diff --git a/Zend/zend_vm_opcodes.c b/Zend/zend_vm_opcodes.c
+index 83c3517807755..0b866aa0183f7 100644
+--- a/Zend/zend_vm_opcodes.c
++++ b/Zend/zend_vm_opcodes.c
+@@ -22,7 +22,7 @@
+ #include <zend.h>
+ #include <zend_vm_opcodes.h>
+ 
+-static const char *zend_vm_opcodes_names[202] = {
++static const char *zend_vm_opcodes_names[203] = {
+ 	"ZEND_NOP",
+ 	"ZEND_ADD",
+ 	"ZEND_SUB",
+@@ -225,9 +225,10 @@ static const char *zend_vm_opcodes_names[202] = {
+ 	"ZEND_CHECK_UNDEF_ARGS",
+ 	"ZEND_FETCH_GLOBALS",
+ 	"ZEND_VERIFY_NEVER_TYPE",
++	"ZEND_LITERAL_CHECK",
+ };
+ 
+-static uint32_t zend_vm_opcodes_flags[202] = {
++static uint32_t zend_vm_opcodes_flags[203] = {
+ 	0x00000000,
+ 	0x00000b0b,
+ 	0x00000b0b,
+@@ -430,6 +431,7 @@ static uint32_t zend_vm_opcodes_flags[202] = {
+ 	0x00000101,
+ 	0x00000101,
+ 	0x00000101,
++	0x00000100,
+ };
+ 
+ ZEND_API const char* ZEND_FASTCALL zend_get_opcode_name(zend_uchar opcode) {
+diff --git a/Zend/zend_vm_opcodes.h b/Zend/zend_vm_opcodes.h
+index 94e74c0a57f12..964757142d809 100644
+--- a/Zend/zend_vm_opcodes.h
++++ b/Zend/zend_vm_opcodes.h
+@@ -285,7 +285,8 @@ END_EXTERN_C()
+ #define ZEND_CHECK_UNDEF_ARGS           199
+ #define ZEND_FETCH_GLOBALS              200
+ #define ZEND_VERIFY_NEVER_TYPE          201
++#define ZEND_LITERAL_CHECK              202
+ 
+-#define ZEND_VM_LAST_OPCODE             201
++#define ZEND_VM_LAST_OPCODE             202
+ 
+ #endif
+diff --git a/ext/opcache/jit/zend_jit_helpers.c b/ext/opcache/jit/zend_jit_helpers.c
+index 5f1bf7b901bcb..ddab6d865d151 100644
+--- a/ext/opcache/jit/zend_jit_helpers.c
++++ b/ext/opcache/jit/zend_jit_helpers.c
+@@ -1182,11 +1182,16 @@ static void ZEND_FASTCALL zend_jit_fast_assign_concat_helper(zval *op1, zval *op
+ 	size_t op2_len = Z_STRLEN_P(op2);
+ 	size_t result_len = op1_len + op2_len;
+ 	zend_string *result_str;
++	bool literal = false;
+ 
+ 	if (UNEXPECTED(op1_len > SIZE_MAX - op2_len)) {
+ 		zend_throw_error(NULL, "String size overflow");
+ 		return;
+ 	}
++	
++	if (UNEXPECTED(ZSTR_IS_LITERAL(Z_STR_P(op1)) && ZSTR_IS_LITERAL(Z_STR_P(op2)))) {
++		literal = true;
++	}
+ 
+ 	do {
+ 		if (Z_REFCOUNTED_P(op1)) {
+@@ -1194,12 +1199,18 @@ static void ZEND_FASTCALL zend_jit_fast_assign_concat_helper(zval *op1, zval *op
+ 				result_str = perealloc(Z_STR_P(op1), ZEND_MM_ALIGNED_SIZE(_ZSTR_STRUCT_SIZE(result_len)), 0);
+ 				ZSTR_LEN(result_str) = result_len;
+ 				zend_string_forget_hash_val(result_str);
++				if (EXPECTED(!literal && ZSTR_IS_LITERAL(result_str))) {
++				    ZSTR_UNSET_LITERAL(&result_str);
++				}
+ 				break;
+ 			}
+ 			GC_DELREF(Z_STR_P(op1));
+ 		}
+ 		result_str = zend_string_alloc(result_len, 0);
+ 		memcpy(ZSTR_VAL(result_str), Z_STRVAL_P(op1), op1_len);
++		if (UNEXPECTED(literal)) {
++		    ZSTR_SET_LITERAL_FAST(result_str);
++		}
+ 	} while(0);
+ 
+ 	ZVAL_NEW_STR(op1, result_str);
+@@ -1221,6 +1232,9 @@ static void ZEND_FASTCALL zend_jit_fast_concat_helper(zval *result, zval *op1, z
+ 
+ 	result_str = zend_string_alloc(result_len, 0);
+ 	memcpy(ZSTR_VAL(result_str), Z_STRVAL_P(op1), op1_len);
++	if (UNEXPECTED(ZSTR_IS_LITERAL(Z_STR_P(op1)) && ZSTR_IS_LITERAL(Z_STR_P(op2)))) {
++		ZSTR_SET_LITERAL_FAST(result_str);
++	}
+ 
+ 	ZVAL_NEW_STR(result, result_str);
+ 
+diff --git a/ext/standard/basic_functions.stub.php b/ext/standard/basic_functions.stub.php
+index db9b0148c428b..30557cb4cef49 100755
+--- a/ext/standard/basic_functions.stub.php
++++ b/ext/standard/basic_functions.stub.php
+@@ -1424,6 +1424,8 @@ function is_object(mixed $value): bool {}
+ 
+ function is_scalar(mixed $value): bool {}
+ 
++function is_literal(mixed $value): bool {}
++
+ /** @param string $callable_name */
+ function is_callable(mixed $value, bool $syntax_only = false, &$callable_name = null): bool {}
+ 
+diff --git a/ext/standard/basic_functions_arginfo.h b/ext/standard/basic_functions_arginfo.h
+index e4ee7fc112209..af80bd9cb4878 100644
+--- a/ext/standard/basic_functions_arginfo.h
++++ b/ext/standard/basic_functions_arginfo.h
+@@ -2087,6 +2087,8 @@ ZEND_END_ARG_INFO()
+ 
+ #define arginfo_is_scalar arginfo_boolval
+ 
++#define arginfo_is_literal arginfo_boolval
++
+ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_is_callable, 0, 1, _IS_BOOL, 0)
+ 	ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
+ 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, syntax_only, _IS_BOOL, 0, "false")
+@@ -2797,6 +2799,7 @@ ZEND_FUNCTION(is_string);
+ ZEND_FUNCTION(is_array);
+ ZEND_FUNCTION(is_object);
+ ZEND_FUNCTION(is_scalar);
++ZEND_FUNCTION(is_literal);
+ ZEND_FUNCTION(is_callable);
+ ZEND_FUNCTION(is_iterable);
+ ZEND_FUNCTION(is_countable);
+@@ -3452,6 +3455,7 @@ static const zend_function_entry ext_functions[] = {
+ 	ZEND_FE(is_array, arginfo_is_array)
+ 	ZEND_FE(is_object, arginfo_is_object)
+ 	ZEND_FE(is_scalar, arginfo_is_scalar)
++	ZEND_FE(is_literal, arginfo_is_literal)
+ 	ZEND_FE(is_callable, arginfo_is_callable)
+ 	ZEND_FE(is_iterable, arginfo_is_iterable)
+ 	ZEND_FE(is_countable, arginfo_is_countable)
+diff --git a/ext/standard/formatted_print.c b/ext/standard/formatted_print.c
+index 0990b390d6b29..144d8f19aec38 100644
+--- a/ext/standard/formatted_print.c
++++ b/ext/standard/formatted_print.c
+@@ -19,6 +19,7 @@
+ #include "ext/standard/head.h"
+ #include "php_string.h"
+ #include "zend_execute.h"
++#include "zend_exceptions.h"
+ #include <stdio.h>
+ 
+ #include <locale.h>
+@@ -422,7 +423,7 @@ int php_sprintf_get_argnum(char **format, size_t *format_len) {
+  *  - 0 or more: ArgumentCountError is thrown
+  */
+ static zend_string *
+-php_formatted_print(char *format, size_t format_len, zval *args, int argc, int nb_additional_parameters)
++php_formatted_print(char *format, size_t format_len, zval *args, int argc, int nb_additional_parameters, bool literal)
+ {
+ 	size_t size = 240, outpos = 0;
+ 	int alignment, currarg, adjusting, argnum, width, precision;
+@@ -618,6 +619,12 @@ php_formatted_print(char *format, size_t format_len, zval *args, int argc, int n
+ 
+ 			/* now we expect to find a type specifier */
+ 			tmp = &args[argnum];
++
++			/* now we check if we are (still) producing a literal string */
++			if (literal && !Z_IS_LITERAL_P(tmp)) {
++				literal = false;
++			}
++
+ 			switch (*format) {
+ 				case 's': {
+ 					zend_string *t;
+@@ -727,6 +734,9 @@ php_formatted_print(char *format, size_t format_len, zval *args, int argc, int n
+ 	/* possibly, we have to make sure we have room for the terminating null? */
+ 	ZSTR_VAL(result)[outpos]=0;
+ 	ZSTR_LEN(result) = outpos;
++	if (literal) {
++		ZSTR_SET_LITERAL_FAST(result);
++	}
+ 	return result;
+ 
+ fail:
+@@ -758,17 +768,16 @@ static zval *php_formatted_print_get_array(zend_array *array, int *argc)
+ PHP_FUNCTION(sprintf)
+ {
+ 	zend_string *result;
+-	char *format;
+-	size_t format_len;
++	zend_string *format;
+ 	zval *args;
+ 	int argc;
+ 
+ 	ZEND_PARSE_PARAMETERS_START(1, -1)
+-		Z_PARAM_STRING(format, format_len)
++		Z_PARAM_STR(format)
+ 		Z_PARAM_VARIADIC('*', args, argc)
+ 	ZEND_PARSE_PARAMETERS_END();
+ 
+-	result = php_formatted_print(format, format_len, args, argc, 1);
++	result = php_formatted_print(ZSTR_VAL(format), ZSTR_LEN(format), args, argc, 1, ZSTR_IS_LITERAL(format));
+ 	if (result == NULL) {
+ 		RETURN_THROWS();
+ 	}
+@@ -780,20 +789,19 @@ PHP_FUNCTION(sprintf)
+ PHP_FUNCTION(vsprintf)
+ {
+ 	zend_string *result;
+-	char *format;
+-	size_t format_len;
++	zend_string *format;
+ 	zval *args;
+ 	zend_array *array;
+ 	int argc;
+ 
+ 	ZEND_PARSE_PARAMETERS_START(2, 2)
+-		Z_PARAM_STRING(format, format_len)
++		Z_PARAM_STR(format)
+ 		Z_PARAM_ARRAY_HT(array)
+ 	ZEND_PARSE_PARAMETERS_END();
+ 
+ 	args = php_formatted_print_get_array(array, &argc);
+ 
+-	result = php_formatted_print(format, format_len, args, argc, -1);
++	result = php_formatted_print(ZSTR_VAL(format), ZSTR_LEN(format), args, argc, -1, ZSTR_IS_LITERAL(format));
+ 	efree(args);
+ 	if (result == NULL) {
+ 		RETURN_THROWS();
+@@ -817,7 +825,7 @@ PHP_FUNCTION(printf)
+ 		Z_PARAM_VARIADIC('*', args, argc)
+ 	ZEND_PARSE_PARAMETERS_END();
+ 
+-	result = php_formatted_print(format, format_len, args, argc, 1);
++	result = php_formatted_print(format, format_len, args, argc, 1, false);
+ 	if (result == NULL) {
+ 		RETURN_THROWS();
+ 	}
+@@ -845,7 +853,7 @@ PHP_FUNCTION(vprintf)
+ 
+ 	args = php_formatted_print_get_array(array, &argc);
+ 
+-	result = php_formatted_print(format, format_len, args, argc, -1);
++	result = php_formatted_print(format, format_len, args, argc, -1, false);
+ 	efree(args);
+ 	if (result == NULL) {
+ 		RETURN_THROWS();
+@@ -874,7 +882,7 @@ PHP_FUNCTION(fprintf)
+ 
+ 	php_stream_from_zval(stream, arg1);
+ 
+-	result = php_formatted_print(format, format_len, args, argc, 2);
++	result = php_formatted_print(format, format_len, args, argc, 2, false);
+ 	if (result == NULL) {
+ 		RETURN_THROWS();
+ 	}
+@@ -907,7 +915,7 @@ PHP_FUNCTION(vfprintf)
+ 
+ 	args = php_formatted_print_get_array(array, &argc);
+ 
+-	result = php_formatted_print(format, format_len, args, argc, -1);
++	result = php_formatted_print(format, format_len, args, argc, -1, false);
+ 	efree(args);
+ 	if (result == NULL) {
+ 		RETURN_THROWS();
+diff --git a/ext/standard/string.c b/ext/standard/string.c
+index fc43d53ff1515..329a9a9fed98e 100644
+--- a/ext/standard/string.c
++++ b/ext/standard/string.c
+@@ -1144,6 +1144,8 @@ PHPAPI void php_implode(const zend_string *glue, HashTable *pieces, zval *return
+ 	zend_string  *str;
+ 	char         *cptr;
+ 	size_t        len = 0;
++	bool          literal = ZSTR_IS_LITERAL(glue);
++
+ 	struct {
+ 		zend_string *str;
+ 		zend_long    lval;
+@@ -1169,6 +1171,9 @@ PHPAPI void php_implode(const zend_string *glue, HashTable *pieces, zval *return
+ 			len += ZSTR_LEN(ptr->str);
+ 			ptr->lval = 0;
+ 			ptr++;
++			if (UNEXPECTED(literal && !ZSTR_IS_LITERAL(Z_STR_P(tmp)))) {
++				literal = false;
++			}
+ 		} else if (UNEXPECTED(Z_TYPE_P(tmp) == IS_LONG)) {
+ 			zend_long val = Z_LVAL_P(tmp);
+ 
+@@ -1182,11 +1187,13 @@ PHPAPI void php_implode(const zend_string *glue, HashTable *pieces, zval *return
+ 				val /= 10;
+ 				len++;
+ 			}
++			literal = false;
+ 		} else {
+ 			ptr->str = zval_get_string_func(tmp);
+ 			len += ZSTR_LEN(ptr->str);
+ 			ptr->lval = 1;
+ 			ptr++;
++			literal = false;
+ 		}
+ 	} ZEND_HASH_FOREACH_END();
+ 
+@@ -1219,6 +1226,9 @@ PHPAPI void php_implode(const zend_string *glue, HashTable *pieces, zval *return
+ 	}
+ 
+ 	free_alloca(strings, use_heap);
++	if (UNEXPECTED(literal)) {
++		ZSTR_SET_LITERAL(&str);
++	}
+ 	RETURN_NEW_STR(str);
+ }
+ /* }}} */
+@@ -5241,6 +5251,10 @@ PHP_FUNCTION(str_repeat)
+ 	/* Initialize the result string */
+ 	result = zend_string_safe_alloc(ZSTR_LEN(input_str), mult, 0, 0);
+ 	result_len = ZSTR_LEN(input_str) * mult;
++	
++	if (ZSTR_IS_LITERAL(input_str)) {
++		ZSTR_SET_LITERAL_FAST(result);
++	}
+ 
+ 	/* Heavy optimization for situations where input string is 1 byte long */
+ 	if (ZSTR_LEN(input_str) == 1) {
+@@ -5518,6 +5532,7 @@ PHP_FUNCTION(str_pad)
+ {
+ 	/* Input arguments */
+ 	zend_string *input;				/* Input string */
++	zend_string *pad_string = NULL;
+ 	zend_long pad_length;			/* Length to pad to */
+ 
+ 	/* Helper variables */
+@@ -5527,12 +5542,13 @@ PHP_FUNCTION(str_pad)
+ 	zend_long   pad_type_val = STR_PAD_RIGHT; /* The padding type value */
+ 	size_t	   i, left_pad=0, right_pad=0;
+ 	zend_string *result = NULL;	/* Resulting string */
++	bool literal = false;
+ 
+ 	ZEND_PARSE_PARAMETERS_START(2, 4)
+ 		Z_PARAM_STR(input)
+ 		Z_PARAM_LONG(pad_length)
+ 		Z_PARAM_OPTIONAL
+-		Z_PARAM_STRING(pad_str, pad_str_len)
++		Z_PARAM_STR(pad_string)
+ 		Z_PARAM_LONG(pad_type_val)
+ 	ZEND_PARSE_PARAMETERS_END();
+ 
+@@ -5542,6 +5558,15 @@ PHP_FUNCTION(str_pad)
+ 		RETURN_STR_COPY(input);
+ 	}
+ 
++	if (pad_string) {
++		pad_str_len = ZSTR_LEN(pad_string);
++		pad_str = ZSTR_VAL(pad_string);
++
++		literal = ZSTR_IS_LITERAL(pad_string) && ZSTR_IS_LITERAL(input);
++	} else {
++		literal = ZSTR_IS_LITERAL(input);
++	}
++
+ 	if (pad_str_len == 0) {
+ 		zend_argument_value_error(3, "must be a non-empty string");
+ 		RETURN_THROWS();
+@@ -5588,6 +5613,10 @@ PHP_FUNCTION(str_pad)
+ 
+ 	ZSTR_VAL(result)[ZSTR_LEN(result)] = '\0';
+ 
++	if (UNEXPECTED(literal)) {
++		ZSTR_SET_LITERAL_FAST(result);
++	}
++
+ 	RETURN_NEW_STR(result);
+ }
+ /* }}} */
+diff --git a/ext/standard/tests/strings/literals/001.phpt b/ext/standard/tests/strings/literals/001.phpt
+new file mode 100644
+index 0000000000000..3d3c24ffd36a9
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/001.phpt
+@@ -0,0 +1,13 @@
++--TEST--
++Literal Strings
++--ENV--
++TAINTED=string
++--FILE--
++<?php
++var_dump(
++    is_literal("string"),
++    is_literal($_ENV["TAINTED"]));
++?>
++--EXPECT--
++bool(true)
++bool(false)
+diff --git a/ext/standard/tests/strings/literals/002.phpt b/ext/standard/tests/strings/literals/002.phpt
+new file mode 100644
+index 0000000000000..9307d23182a84
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/002.phpt
+@@ -0,0 +1,16 @@
++--TEST--
++Literal Variables Compile Time Concat
++--FILE--
++<?php
++var_dump(
++    "literal" . "string",
++        is_literal("literal" . "string"),
++     24 . "" . 42,
++        is_literal(24 . "" . 42)); # different result at runtime
++?>
++--EXPECT--
++string(13) "literalstring"
++bool(true)
++string(4) "2442"
++bool(true)
++
+diff --git a/ext/standard/tests/strings/literals/003.phpt b/ext/standard/tests/strings/literals/003.phpt
+new file mode 100644
+index 0000000000000..2c5581a799e41
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/003.phpt
+@@ -0,0 +1,52 @@
++--TEST--
++Literal Variables VM Concat
++--ENV--
++TAINTED=string
++--FILE--
++<?php
++$literal = "literal";
++$string = "string";
++
++$twoFour = 24;
++$fourTwo = 42;
++
++var_dump(
++    $literal . " " . $string,
++        is_literal($literal . $string),
++    $twoFour . "" . $fourTwo,
++        is_literal($twoFour . "" . $fourTwo), # different result at compile time
++    "not " . "literal " . $_ENV["TAINTED"],
++        is_literal("not " . "literal " . $_ENV["TAINTED"]),
++     $literal . $string,
++        is_literal($literal . $string),
++     'literal' . 'string',
++        is_literal('literal' . 'string'),
++);
++
++$literal .= $string;
++
++var_dump(
++    $literal,
++        is_literal($literal));
++        
++$literal .= $_ENV["TAINTED"];
++
++var_dump(
++    $literal,
++        is_literal($literal));
++?>
++--EXPECT--
++string(14) "literal string"
++bool(true)
++string(4) "2442"
++bool(false)
++string(18) "not literal string"
++bool(false)
++string(13) "literalstring"
++bool(true)
++string(13) "literalstring"
++bool(true)
++string(13) "literalstring"
++bool(true)
++string(19) "literalstringstring"
++bool(false)
+diff --git a/ext/standard/tests/strings/literals/004.phpt b/ext/standard/tests/strings/literals/004.phpt
+new file mode 100644
+index 0000000000000..99c18207ed405
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/004.phpt
+@@ -0,0 +1,28 @@
++--TEST--
++Literal Variables VM Rope
++--ENV--
++TAINTED=string
++--FILE--
++<?php
++$literal = "literal";
++$string = "string";
++
++$twoFour = 24;
++$fourTwo = 42;
++
++var_dump(
++    "{$literal} {$string}",
++        is_literal("{$literal} {$string}"),
++    "{$twoFour} {$fourTwo}",
++        is_literal("{$twoFour} {$fourTwo}"),
++    "not {$literal} {$_ENV["TAINTED"]}",
++        is_literal("not {$literal} {$_ENV["TAINTED"]}")
++);
++?>
++--EXPECT--
++string(14) "literal string"
++bool(true)
++string(5) "24 42"
++bool(false)
++string(18) "not literal string"
++bool(false)
+diff --git a/ext/standard/tests/strings/literals/005.phpt b/ext/standard/tests/strings/literals/005.phpt
+new file mode 100644
+index 0000000000000..d88ea570e8c8a
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/005.phpt
+@@ -0,0 +1,48 @@
++--TEST--
++Literal Variables Format
++--DESCRIPTION--
++Formatted prints are allowed to produce a trusted string 
++if is_literal would return true for all arguments
++--ENV--
++TAINTED=string
++--FILE--
++<?php
++$allow = [
++    "s" => "string",
++];
++
++$disallow = [
++    "s" => $_ENV["TAINTED"],
++    "d" => 1.1,
++    "u" => 1.1,
++    "e" => 1.1,
++    "c" => 1.1,
++    "o" => 1.1,
++    "x" => 1.1,
++    "X" => 1.1,
++    "b" => 1.1 
++];
++
++foreach ($allow as $spec => $value) {
++    var_dump(
++        is_literal(
++            sprintf("%{$spec}", $value)));
++}
++
++foreach ($disallow as $spec => $value) {
++    var_dump(
++        is_literal(
++            sprintf("%{$spec}", $value)));
++}
++?>
++--EXPECT--
++bool(true)
++bool(false)
++bool(false)
++bool(false)
++bool(false)
++bool(false)
++bool(false)
++bool(false)
++bool(false)
++bool(false)
+diff --git a/ext/standard/tests/strings/literals/006.phpt b/ext/standard/tests/strings/literals/006.phpt
+new file mode 100644
+index 0000000000000..ea78393c61bf6
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/006.phpt
+@@ -0,0 +1,30 @@
++--TEST--
++Literal Variables in Constant Arrays
++--FILE--
++<?php
++$array = ['aa' => 'aa', 'bb' => 'bb', 'cc' => 'cc'];
++
++foreach ($array as $k => $v)
++    var_dump(is_literal($k), is_literal($v));
++
++echo PHP_EOL;
++
++$array = ['aa' => 1, 'bb' => 2, 'cc' => 3];
++
++foreach ($array as $k => $v)
++    var_dump(is_literal($k), is_literal($v));
++?>
++--EXPECT--
++bool(true)
++bool(true)
++bool(true)
++bool(true)
++bool(true)
++bool(true)
++
++bool(true)
++bool(false)
++bool(true)
++bool(false)
++bool(true)
++bool(false)
+diff --git a/ext/standard/tests/strings/literals/007.phpt b/ext/standard/tests/strings/literals/007.phpt
+new file mode 100644
+index 0000000000000..8beb27566981d
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/007.phpt
+@@ -0,0 +1,17 @@
++--TEST--
++Literal Variables in Non Constant Arrays
++--ENV--
++STR=string
++INT=42
++--FILE--
++<?php
++$array = ['aa' => $_ENV["STR"], 'bb' => (int) $_ENV["INT"]];
++
++foreach ($array as $k => $v)
++    var_dump(is_literal($k), is_literal($v));
++?>
++--EXPECT--
++bool(true)
++bool(false)
++bool(true)
++bool(false)
+diff --git a/ext/standard/tests/strings/literals/008.phpt b/ext/standard/tests/strings/literals/008.phpt
+new file mode 100644
+index 0000000000000..b9bf440fcae1b
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/008.phpt
+@@ -0,0 +1,59 @@
++--TEST--
++Literal Variables in Class Declarations
++--FILE--
++<?php
++#[\Bar("parameter")]
++class Foo {
++    const LITERAL = "LITERAL";
++    static $PROPERTY = "STRING"; 
++    
++    public function method($qux) {}
++}
++
++$reflector = new ReflectionClass(Foo::class);
++
++var_dump(
++    $reflector->getName(),
++        is_literal($reflector->getName()));
++
++foreach ($reflector->getAttributes() as $attribute) {
++    $parameters = $attribute->getArguments();
++    
++    var_dump(
++        $attribute->getName(),
++            is_literal($attribute->getName()));
++
++    foreach ($parameters as $parameter => $value) {
++        var_dump(
++            $value,
++            is_literal($value));
++    }
++}
++
++$reflector = new ReflectionMethod(Foo::class, "method");
++
++foreach ($reflector->getParameters() as $parameter) {
++    var_dump(
++        $parameter->getName(),
++        is_literal($parameter->getName()));
++}
++
++var_dump(
++    FOO::LITERAL,
++        is_literal(FOO::LITERAL),
++    Foo::$PROPERTY,
++        is_literal(FOO::$PROPERTY));
++?>
++--EXPECT--
++string(3) "Foo"
++bool(true)
++string(3) "Bar"
++bool(true)
++string(9) "parameter"
++bool(true)
++string(3) "qux"
++bool(true)
++string(7) "LITERAL"
++bool(true)
++string(6) "STRING"
++bool(true)
+diff --git a/ext/standard/tests/strings/literals/009.phpt b/ext/standard/tests/strings/literals/009.phpt
+new file mode 100644
+index 0000000000000..e9cbd71e2428f
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/009.phpt
+@@ -0,0 +1,42 @@
++--TEST--
++Literal Variables in Function Declarations
++--FILE--
++<?php
++#[\Bar("parameter")]
++function foo($qux) {}
++
++$reflector = new ReflectionFunction('foo');
++
++var_dump(
++    $reflector->getName(), 
++        is_literal($reflector->getName()));
++
++foreach ($reflector->getAttributes() as $attribute) {
++    $parameters = $attribute->getArguments();
++    
++    var_dump(
++        $attribute->getName(),
++            is_literal($attribute->getName()));
++
++    foreach ($parameters as $parameter => $value) {
++        var_dump(
++            $value,
++            is_literal($value));
++    }
++}
++
++foreach ($reflector->getParameters() as $parameter) {
++    var_dump(
++        $parameter->getName(),
++        is_literal($parameter->getName()));
++}
++?>
++--EXPECT--
++string(3) "foo"
++bool(true)
++string(3) "Bar"
++bool(true)
++string(9) "parameter"
++bool(true)
++string(3) "qux"
++bool(true)
+diff --git a/ext/standard/tests/strings/literals/011.phpt b/ext/standard/tests/strings/literals/011.phpt
+new file mode 100644
+index 0000000000000..7b6fc694653ab
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/011.phpt
+@@ -0,0 +1,21 @@
++--TEST--
++Literal Variables implode
++--INI--
++opcache.enable_cli=0
++--FILE--
++<?php
++var_dump(
++    is_literal(
++        implode("\t", [1,2,3]))); # Optimizer will CT eval this call to implode and create a literal string
++                                  # Without opcache enabled, this will not return a literal string
++var_dump(
++    is_literal(
++        implode("\t", ["Hello", "World"])));
++var_dump(
++    is_literal(
++        implode(["Hello", "World"])));
++?>
++--EXPECT--
++bool(false)
++bool(true)
++bool(true)
+diff --git a/ext/standard/tests/strings/literals/013.phpt b/ext/standard/tests/strings/literals/013.phpt
+new file mode 100644
+index 0000000000000..8fe49ae9631c7
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/013.phpt
+@@ -0,0 +1,32 @@
++--TEST--
++Literal Variables str_pad
++--ENV--
++TAINTED=string
++--FILE--
++<?php
++var_dump(
++    is_literal(
++        str_pad($_ENV["TAINTED"], 20)));
++var_dump(
++    is_literal(
++        str_pad("hello", 20)));
++var_dump(
++    is_literal(
++        str_pad("hello", 20, $_ENV["TAINTED"])));
++var_dump(
++    is_literal(
++        str_pad("hello", 20, "pad")));
++var_dump(
++    is_literal(
++        str_pad("hello", 10, 9))); # uses on char string padding
++var_dump(
++    is_literal(
++        str_pad("hello", 10, 10))); # no one char string for 10
++?>
++--EXPECT--
++bool(false)
++bool(true)
++bool(false)
++bool(true)
++bool(true)
++bool(false)
+diff --git a/ext/standard/tests/strings/literals/014.phpt b/ext/standard/tests/strings/literals/014.phpt
+new file mode 100644
+index 0000000000000..2ae555f171930
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/014.phpt
+@@ -0,0 +1,21 @@
++--TEST--
++Literal Variables str_repeat
++--ENV--
++TAINTED=string
++--FILE--
++<?php
++var_dump(
++    is_literal(
++        str_repeat($_ENV["TAINTED"], 2)),
++    is_literal(
++        str_repeat("ab", 2)),
++    is_literal(
++        str_repeat(4, 4)), # will use one char strings
++    is_literal(
++        str_repeat(42, 4))); # will not use one char strings
++?>
++--EXPECT--
++bool(false)
++bool(true)
++bool(true)
++bool(false)
+diff --git a/ext/standard/type.c b/ext/standard/type.c
+index 93df434fe310e..a4c5c86671f20 100644
+--- a/ext/standard/type.c
++++ b/ext/standard/type.c
+@@ -397,6 +397,19 @@ PHP_FUNCTION(is_scalar)
+ }
+ /* }}} */
+ 
++/* {{{ Returns true if value is literal */
++PHP_FUNCTION(is_literal)
++{
++	zval *value;
++
++	ZEND_PARSE_PARAMETERS_START(1, 1)
++		Z_PARAM_ZVAL(value)
++	ZEND_PARSE_PARAMETERS_END();
++
++    RETURN_BOOL(Z_IS_LITERAL_P(value));
++}
++/* }}} */
++
+ /* {{{ Returns true if var is callable. */
+ PHP_FUNCTION(is_callable)
+ {
