@@ -10,11 +10,13 @@ Then compile them:
 Might need to brew install: icu4c, mhash
 
 ```
+brew install bison re2c libiconv;
+
 cd ./src/a/;
 
-export PATH="/usr/local/opt/bison/bin:$PATH"
-export PKG_CONFIG_PATH="/usr/local/opt/openssl/lib/pkgconfig:/usr/local/opt/icu4c/lib/pkgconfig"
-./buildconf
+export PATH="/usr/local/opt/bison/bin:$PATH" && \
+export PKG_CONFIG_PATH="/usr/local/opt/openssl/lib/pkgconfig:/usr/local/opt/icu4c/lib/pkgconfig" && \
+./buildconf && \
 ./configure \
     --enable-option-checking=fatal \
     --enable-opcache \
@@ -32,7 +34,6 @@ export PKG_CONFIG_PATH="/usr/local/opt/openssl/lib/pkgconfig:/usr/local/opt/icu4
     --enable-pcntl \
     --enable-phpdbg \
     --enable-phpdbg-readline \
-    --enable-phpdbg-webhelper \
     --enable-shmop \
     --enable-soap \
     --enable-sockets \
@@ -69,9 +70,8 @@ export PKG_CONFIG_PATH="/usr/local/opt/openssl/lib/pkgconfig:/usr/local/opt/icu4
     --with-unixODBC \
     --with-xsl \
     --with-zip \
-    --with-zlib \
-    ; say "Done";
-make && say "Done" || say "Error"; echo
+    --with-zlib && \
+make && sed -i '' 's/9000/9001/g' ./sapi/fpm/www.conf && say "Done" || say "Error"; echo
 ```
 
 ---
