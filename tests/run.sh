@@ -32,19 +32,19 @@ export SCRIPT_FILENAME="./500-laravel${SCRIPT_NAME}";
 export APP_ENV="production"
 export APP_DEBUG=false
 
-for V in $(printf 'a f e %.0s' {1..11}); do echo -n $V >> output.txt; ../src/$V/sapi/cgi/php-cgi "-T10" > /dev/null 2>> output.txt; done
+for V in $(printf 'a b %.0s' {1..11}); do sleep 0.3; echo -n $V >> output.txt; ../src/$V/sapi/cgi/php-cgi "-T10" > /dev/null 2>> output.txt; done
 
 echo "Test 2 / Symfony" | tee -a output.txt;
 
 export SCRIPT_FILENAME="./600-symfony${SCRIPT_NAME}";
 export APP_ENV="prod"
 
-for V in $(printf 'a f e %.0s' {1..11}); do echo -n $V >> output.txt; ../src/$V/sapi/cgi/php-cgi "-T10" > /dev/null 2>> output.txt; done
+for V in $(printf 'a b %.0s' {1..11}); do sleep 0.3; echo -n $V >> output.txt; ../src/$V/sapi/cgi/php-cgi "-T10" > /dev/null 2>> output.txt; done
 
 echo "Test 3 / 001.phpt" | tee -a output.txt;
 
-for V in $(printf 'a f e %.0s' {1..11}); do echo -n $V >> output.txt; ../src/$V/sapi/cli/php ./001.phpt >> output.txt; done
+for V in $(printf 'a b %.0s' {1..11}); do sleep 0.3; echo -n $V >> output.txt; ../src/$V/sapi/cli/php ./001.phpt >> output.txt; done
 
-perl -0777 -pe 's/(^|\n)a( |\nElapsed time: )([0-9\.]+)( sec)?\nf( |\nElapsed time: )([0-9\.]+)( sec)?\ne( |\nElapsed time: )([0-9\.]+)( sec)?/\n$3\t$6\t$9/g' -i output.txt;
+perl -0777 -pe 's/(^|\n)a( |\nElapsed time: )([0-9\.]+)( sec)?\nb( |\nElapsed time: )([0-9\.]+)( sec)?/\n$3\t$6/g' -i output.txt;
 
 echo "Done";
