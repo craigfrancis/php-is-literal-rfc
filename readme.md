@@ -1,8 +1,8 @@
 # PHP RFC: Is_Literal
 
-* Version: 1.0
+* Version: 1.1
 * Date: 2020-03-21
-* Updated: 2021-06-06
+* Updated: 2021-07-04
 * Author: Craig Francis, craig#at#craigfrancis.co.uk
 * Contributors: Joe Watkins, Máté Kocsis
 * Status: Under Discussion
@@ -11,9 +11,9 @@
 
 ## Introduction
 
-Add the function `is_literal()`, a lightweight and effective way to identify if a string was written by a developer, to remove the risk of a variable containing an Injection Vulnerability.
+Add the function `is_literal()`, a lightweight and effective way to identify if a string was written by a developer, removing the risk of a variable containing an Injection Vulnerability.
 
-It's a simple process where a flag is set internally on strings that have been written by a developer (as opposed to a user) and the flag persists through concatenation with other 'literal' strings. The function checks the flag is present and thus no user data is included.
+It's a simple process where a flag is set internally on strings that have been written by a developer (as opposed to a user), where the flag persists through concatenation with other 'literal' strings. The function checks the flag is present and thus no user data is included.
 
 It avoids the "false sense of security" that comes with the flawed "Taint Checking" approach, [because escaping is very difficult to get right](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/escaping.php?ts=4). It's much safer for developers to use parameterised queries, and well-tested libraries.
 
@@ -33,7 +33,9 @@ $qb->select('u')
 
 Injection and Cross-Site Scripting (XSS) vulnerabilities are **easy to make**, **hard to identify**, and **very common**.
 
-We like to think every developer reads the documentation, and would never directly include (inject) user values into their SQL/HTML/CLI - but we all know that's not the case.
+With SQL Injection, it just takes 1 mistake, and the attacker can usually read everything in the database (SQL Map, Havij, jSQL, etc).
+
+When it comes to coding, we like to think every developer reads the documentation, and would never directly include (inject) user values into their SQL/HTML/CLI - but we all know that's not the case.
 
 It's why these two issues have **always** been on the [OWASP Top 10](https://owasp.org/www-project-top-ten/); a list designed to raise awareness of common issues, ranked on their prevalence, exploitability, detectability, and impact:
 
@@ -66,14 +68,18 @@ Libraries would be able to use `is_literal()` immediately, allowing them to warn
 
 ## Proposal
 
-Add the function `is_literal()`, where a literal is defined as:
+Add the function `is_literal()`.
 
-- Strings defined by the programmer (literals)
-- Strings defined by the engine itself (called interned strings)
+A string shall pass the `is_literal` check if it was defined by the programmer in source code, or is the result of a function or instruction whose inputs would all pass the `is_literal` check.
 
-> (Under The Hood: Interned strings do not include input values; instead interned strings are: Strings defined by the programmer, strings defined in the source code of php, and strings defined by the engine (either at compile or runtime), with known values.)
+Concatenation instructions and the following string functions are therefore able to produce literals:
 
-Any function or instruction that is aware of "literal" strings shall produce a "literal" string if all input would pass `is_literal()`. This includes `str_repeat()`, `str_pad()`, `implode()`, `join()`, `array_pad()`, and `array_fill()`.
+- `str_repeat()`
+- `str_pad()`
+- `implode()`
+- `join()`
+
+(Namespaces constructed for the programmer by the compiler will also be marked literal for convenience.)
 
 ```php
 is_literal('Example'); // true
@@ -105,7 +111,7 @@ example(strtoupper($a)); // Exception thrown.
 
 ## Try It
 
-[Test it out on 3v4l.org](https://3v4l.org/#focus=rfc.literals) - Currently using the function name `is_noble()`, while we tested integer support.
+[Test it out on 3v4l.org](https://3v4l.org/#focus=rfc.literals)
 
 [How it can be used by libraries](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/example.php?ts=4) - Notice how this example library just raises a warning, to simply let the developer know about the issue, **without breaking anything**. And it provides an `"unsafe_value"` value-object to bypass the `is_literal()` check, but none of the examples need to use it (can be useful as a temporary thing, but there are much safer/better solutions, which developers are/should already be using).
 
@@ -224,6 +230,8 @@ for ($k = 1; $k < $count; $k++) {
 }
 ```
 
+And libraries can easily abstract this for the developer.
+
 ### Non-Parameterised Values
 
 **How can this work with Table and Field names in SQL, which cannot use parameters?**
@@ -260,7 +268,7 @@ While most systems can use literal values entirely, these special non-literal va
 
 This implementation does not provide a way for a developer to mark anything they want as a literal. This is on purpose. We do not want to recreate the biggest flaw of Taint Checking. It would be very easy for a naive developer to mark all escaped values as a literal (seeing it as a safe value, which is [wrong](#taint_checking)).
 
-That said, we do not pretend there aren't ways around this (e.g. using [var_export](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/is-trusted-bypass.php)), but doing so is clearly the developer doing something wrong. We want to provide safety rails, but there is nothing stopping the developer from jumping over them if that's their choice.
+That said, we do not pretend there aren't ways around this (e.g. using [var_export](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/is-literal-bypass.php)), but doing so is clearly the developer doing something wrong. We want to provide safety rails, but there is nothing stopping the developer from jumping over them if that's their choice.
 
 ### Usage by Libraries
 
@@ -345,7 +353,7 @@ $sql .= ' ORDER BY name ' . $sortOrder;
 $db->query($sql);
 ```
 
-If a developer changed the literal `'ASC'` to `$_GET['order']`, the error would be noticed by `$db->query()`, but it's not clear where the non-literal value was introduced. Whereas, if they used `literal_concat()`, that would raise an exception much earlier, and highlight exactly where the mistake happened:
+If a developer changed the literal `'ASC'` to `$_GET['order']`, the error would be noticed by `$db->query()`, but it's not clear where the non-literal value was introduced. Whereas, if they used `literal_concat()`, that would raise an exception much earlier, stopping script execution, and highlight exactly where the mistake happened:
 
 ```php
 $sql = literal_concat($sql, ' ORDER BY name ', $sortOrder);
@@ -371,6 +379,25 @@ $sql = 'DELETE FROM my_table WHERE my_date >= ?'; // RISKY
 The parameters could be set to "/" or "0000-00-00", which can result in deleting a lot more data than expected.
 
 There's no single RFC that can completely solve all developer errors, but this takes one of the biggest ones off the table.
+
+### Compiler Optimisations
+
+The implementation has been updated to avoid situations that could have confused the developer:
+
+```php
+$one = 1;
+$a = 'A' . $one; // false, flag removed because it's being concatenated with an integer.
+$b = 'A' . 1; // Was true, as the compiler optimised this to the literal 'A1'.
+
+$a = "Hello ";
+$b = $a . 2; // Was true, as the 2 was coerced to the string '2' (to optimise the concatenation).
+
+$a = implode("-", [1, 2, 3]); // Was true with OPcache, as it could optimise this to the literal '1-2-3'
+
+$a = chr(97); // Was true, due to the use of Interned Strings.
+```
+
+This has been achieved by using the Lexer to mark strings as a literal (i.e. earlier in the process).
 
 ### Extensions
 
@@ -431,28 +458,7 @@ None known
 
 ## Open Issues
 
-### Inconsistencies
-
-While compile-time and run-time concatenation with literal strings is consistent and works, when it comes to some developer-defined values (like integers, [which we cannot flag](#integer_values)), the compiling process can optimise a value so it's seen as a literal.
-
-As these optimisations happen during the compilation process, they cannot contain user data; but developers may wonder why a developer defined integer can sometimes be seen as a literal, e.g.
-
-```php
-$one = 1;
-is_literal('A' . $one); // false, flag removed with runtime concatenation of an integer.
-is_literal('A' . 1); // true, compiler optimises this to the literal 'A1'.
-
-$a = "Hello ";
-$b = $a . 2; // The 2 is coerced to the string '2' to optimise the concatenation.
-is_literal($b); // true
-
-$a = implode("-", [1, 2, 3]);
-is_literal($a); // Normally false, but OPcache can optimise to the literal '1-2-3'
-```
-
-### Interned Strings
-
-Output from `chr()` appears to be a literal. This was noticed by Claude Pache, and on a technical level is due to the [use of Interned Strings](https://news-web.php.net/php.internals/114877), an optimisation used by `RETURN_CHAR` that re-uses single character values. While this could be used as a way to intentionally [fake a literal string](#faking_it), it's unlikely to be used to create sensitive strings.
+None
 
 ## Future Scope
 
@@ -478,7 +484,7 @@ N/A
 
 ## Rejected Features
 
-N/A
+- [Supporting Integers](#integer_values)
 
 ## Thanks
 
