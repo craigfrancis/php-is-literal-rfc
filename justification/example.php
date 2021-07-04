@@ -7,20 +7,21 @@
 
 		private $pdo = NULL;
 		protected $protection_level = 1;
+			// 0 = No checks, could be useful on the production server.
 			// 1 = Just warnings, the default.
 			// 2 = Exceptions, for anyone who wants to be absolutely sure.
 
-		function noble_check($var) {
-			if (!function_exists('is_noble') || is_noble($var)) {
+		function literal_check($var) {
+			if (!function_exists('is_literal') || is_literal($var)) {
 				// Fine - This is a programmer defined string (bingo), or not using PHP 8.1
 			} else if ($var instanceof unsafe_value) {
 				// Fine - Not ideal, but at least they know this one is unsafe.
 			} else if ($this->protection_level === 0) {
 				// Fine - Programmer aware, and is choosing to disable this check everywhere.
 			} else if ($this->protection_level === 1) {
-				trigger_error('Non-noble value detected!', E_USER_WARNING);
+				trigger_error('Non-literal value detected!', E_USER_WARNING);
 			} else {
-				throw new Exception('Non-noble value detected!');
+				throw new Exception('Non-literal value detected!');
 			}
 		}
 		function enforce_injection_protection() {
@@ -31,7 +32,7 @@
 		}
 
 		function where($sql, $parameters = []) {
-			$this->noble_check($sql); // Used any time an argument should be checked.
+			$this->literal_check($sql); // Used any time an argument should be checked.
 			// ...
 		}
 
@@ -41,7 +42,7 @@
 				// $this->pdo = new PDO('mysql:dbname=...;host=...', '...', '...', [PDO::ATTR_EMULATE_PREPARES => false]);
 			}
 
-			$this->noble_check($sql);
+			$this->literal_check($sql);
 
 			foreach ($aliases as $name => $value) {
 				if (!preg_match('/^[a-z0-9_]+$/', $name)) {
@@ -85,7 +86,7 @@
 // Normal use:
 
 
-	$id = trim(' 1 '); // Using trim() so it's not marked as noble, e.g. $_GET['id']
+	$id = trim(' 1 '); // Using trim() so it's not marked as literal, e.g. $_GET['id']
 
 	var_dump($db->query('SELECT name FROM user WHERE id = ?', [$id]));
 
@@ -185,7 +186,7 @@
 
 
 
-	var_dump(is_noble($sql), $sql, $parameters);
+	var_dump(is_literal($sql), $sql, $parameters);
 
 	var_dump($db->query($sql, $parameters));
 
@@ -199,7 +200,7 @@
 	$parameters = [];
 
 	$aliases = [
-			'with_1'  => trim(' w1 '), // Using trim() so it's not marked as noble.
+			'with_1'  => trim(' w1 '), // Using trim() so it's not marked as literal.
 			'table_1' => trim(' user '),
 			'field_1' => trim(' email '),
 			'field_2' => trim(' dob '), // ... All of these are user defined fields.
@@ -233,8 +234,8 @@
 		private $sql = '';
 		private $parameters = [];
 		public function add_sql($sql) {
-			if (!is_noble($sql)) {
-				throw new Exception('Non-noble value detected!');
+			if (!is_literal($sql)) {
+				throw new Exception('Non-literal value detected!');
 			}
 			$this->sql .= $sql;
 		}
@@ -252,7 +253,7 @@
 			$this->sql .= ':' . $name;
 		}
 		public function get_sql() {
-			return $this->sql; // Does not return a noble value, but all the inputs have been checked in the appropriate way.
+			return $this->sql; // Does not return a literal value, but all the inputs have been checked in the appropriate way.
 		}
 		public function get_parameters() {
 			return $this->parameters;
@@ -266,7 +267,7 @@
 
 
 
-	$conditions = [ // Using trim() so none of these are marked as noble (similar to the data Drupal can work with)
+	$conditions = [ // Using trim() so none of these are marked as literal (similar to the data Drupal can work with)
 			trim(' field_2 ') => [
 				trim(' arg_0 ') => rand(1, 10),
 				trim(' arg_1 ') => rand(1, 10),
@@ -313,8 +314,8 @@
 	// $pattern in preg_match()
 	// etc...
 
-	function html_template($html, $parameters) { if (!is_noble($html)) { throw new Exception('Non-noble value detected!'); } /* ... */ }
-	function run_command($cmd, $parameters)    { if (!is_noble($cmd))  { throw new Exception('Non-noble value detected!'); } /* ... */ }
-	function run_eval($php, $parameters)       { if (!is_noble($php))  { throw new Exception('Non-noble value detected!'); } /* ... */ }
+	function html_template($html, $parameters) { if (!is_literal($html)) { throw new Exception('Non-literal value detected!'); } /* ... */ }
+	function run_command($cmd, $parameters)    { if (!is_literal($cmd))  { throw new Exception('Non-literal value detected!'); } /* ... */ }
+	function run_eval($php, $parameters)       { if (!is_literal($php))  { throw new Exception('Non-literal value detected!'); } /* ... */ }
 
 ?>

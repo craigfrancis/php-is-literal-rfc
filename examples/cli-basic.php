@@ -2,8 +2,8 @@
 
 function parameterised_exec($cmd, $args = []) {
 
-  if (!is_noble($cmd)) {
-    throw new Exception('The first argument must be noble');
+  if (!is_literal($cmd)) {
+    throw new Exception('The first argument must be a literal');
   }
 
   $offset = 0;

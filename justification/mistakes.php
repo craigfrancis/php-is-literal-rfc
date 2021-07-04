@@ -40,7 +40,7 @@
 //--------------------------------------------------
 // CakePHP, Query Builder
 // https://book.cakephp.org/3/en/orm/query-builder.html
-// Parts of the where() array need to be noble (literals), because those string are added to the SQL:
+// Parts of the where() array need to be a literal, because those string are added to the SQL:
 
 	$_GET['id'] = 'id';
 
@@ -68,7 +68,7 @@
 //--------------------------------------------------
 // CakePHP, Connection Class
 // https://book.cakephp.org/3/en/orm/database-basics.html#connection-classes
-// The $sql argument, in methods like `query()` shouldn't allow non-noble values.
+// The $sql argument, in methods like `query()` shouldn't allow non-literal values.
 // https://github.com/cakephp/cakephp/blob/master/src/Database/Connection.php#L353
 
 	$_GET['id'] = 'id';
@@ -81,7 +81,7 @@
 // RedBean, find
 // https://redbeanphp.com/index.php?p=/finding
 // "Never put user input directly in your query!"
-// The `$sql` argument needs to be noble.
+// The `$sql` argument needs to be literal.
 // https://github.com/gabordemooij/redbean/blob/master/RedBeanPHP/Finder.php#L191
 
 	$_GET['id'] = 'id';

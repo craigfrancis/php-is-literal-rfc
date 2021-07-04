@@ -2,7 +2,7 @@
 
 function template_xpath($html, $values) {
 
-  if (!is_noble($html)) {
+  if (!is_literal($html)) {
     throw new Exception('Invalid Template HTML.');
   }
 
@@ -13,14 +13,14 @@ function template_xpath($html, $values) {
 
   foreach ($values as $query => $attributes) {
 
-    if (!is_noble($query)) {
+    if (!is_literal($query)) {
       throw new Exception('Invalid Template XPath.');
     }
 
     foreach ($xpath->query($query) as $element) {
       foreach ($attributes as $attribute => $value) {
 
-        if (!is_noble($attribute)) {
+        if (!is_literal($attribute)) {
           throw new Exception('Invalid Template Attribute.');
         }
 
