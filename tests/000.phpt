@@ -1,5 +1,7 @@
 --TEST--
 Test is_literal() function
+--ENV--
+TAINTED=strings
 --FILE--
 <?php
 
@@ -11,6 +13,12 @@ $literal_c = 'ccc';
 $literal_copy = $literal_a;
 $literal_blank = '';
 $literal_null = NULL;
+$literal_single_quote = '\'';
+$literal_double_quote = '"';
+$literal_string_false = 'false';
+$literal_string_id = 'id'; // interned_strings_permanent
+$literal_string_user = 'user';
+$literal_string_get_token_name = 'getTokenName'; // From tokenizer.stub.php
 $number_1 = 123;
 $non_literal = strtoupper('evil-non-literal');
 $append_literal1 = 'a' . 'b'; // Zend/zend_operators.c, concat_function, zend_string_alloc
@@ -30,6 +38,8 @@ $edit_non_literal1 = 'abc';
 $edit_non_literal1[1] = 'X';
 $edit_non_literal2 = 'a';
 $edit_non_literal2++;
+$interned_char_1 = chr(97);
+$interned_char_2 = substr($_ENV['TAINTED'], 0, 1);
 $array_key = ['literal' => 'a', 'not' => strtoupper('evil-non-literal')];
 $array_int1 = ['a', 'bb'];
 $array_int2 = ['a', strtoupper('evil-non-literal')];
@@ -65,18 +75,31 @@ var_dump(
 		'basic-blank',
 		true  === is_literal(''),
 		'basic-int',
-		false  === is_literal(1),
+		false === is_literal(1),
 		'basic-null',
 		false === is_literal(NULL),
 
 		'basic-var-string',
 		true  === is_literal($literal_a),
+		'basic-var-single-quote',
+		true  === is_literal($literal_single_quote),
+		'basic-var-double-quote',
+		true  === is_literal($literal_double_quote),
+		'basic-var-string-false',
+		true  === is_literal($literal_string_false),
+		'basic-var-string-id',
+		true  === is_literal($literal_string_id),
+		'basic-var-string-user',
+		true  === is_literal($literal_string_user),
+		'basic-var-string-get-token-name',
+		true  === is_literal($literal_string_get_token_name),
+
 		'basic-var-blank',
 		true  === is_literal($literal_blank),
 		'basic-var-copy',
 		true  === is_literal($literal_copy),
 		'basic-var-int',
-		false  === is_literal($number_1),
+		false === is_literal($number_1),
 
 		'basic-array-str-key-literal',
 		true  === is_literal($array_key['literal']),
@@ -95,6 +118,11 @@ var_dump(
 		false === is_literal($edit_non_literal1),
 		'basic-string-edit-increment',
 		false === is_literal($edit_non_literal2),
+
+		'basic-string-interned-char-1',
+		false === is_literal($interned_char_1),
+		'basic-string-interned-char-2',
+		false === is_literal($interned_char_2),
 
 		'basic-function-output-non',
 		false === is_literal($non_literal), // No output from any function can be trusted.
@@ -136,7 +164,7 @@ var_dump(
 		'concat-variables-1',
 		true  === is_literal($literal_a . $literal_b),
 		'concat-variables-2',
-		true  === is_literal($literal_a . '' . $literal_b),
+		true  === is_literal($literal_a . 'X' . $literal_b),
 		'concat-variable-inline',
 		true  === is_literal($literal_a . 'B'),
 		'concat-inline-variable',
@@ -165,7 +193,7 @@ var_dump(
 		'concat-append-int-var-2',
 		false === is_literal("$literal_a $number_1"),
 		'concat-append-null',
-		true  === is_literal($literal_a . NULL),
+		false === is_literal($literal_a . NULL),
 
 			 // ZEND_VM_HANDLER, ZEND_ROPE_END
 
@@ -242,6 +270,9 @@ var_dump(
 		true  === is_literal(array_fill(0, 10, $literal_a)[5]),
 		'concat-array_fill-value-non',
 		false === is_literal(array_fill(0, 10, $non_literal)[5]),
+
+		'sprintf-basic-chr',
+		false === is_literal(chr(32)),
 
 		'sprintf-basic-literal-1',
 		false === is_literal(sprintf('test')),
@@ -341,6 +372,18 @@ string(10) "basic-null"
 bool(true)
 string(16) "basic-var-string"
 bool(true)
+string(22) "basic-var-single-quote"
+bool(true)
+string(22) "basic-var-double-quote"
+bool(true)
+string(22) "basic-var-string-false"
+bool(true)
+string(19) "basic-var-string-id"
+bool(true)
+string(21) "basic-var-string-user"
+bool(true)
+string(31) "basic-var-string-get-token-name"
+bool(true)
 string(15) "basic-var-blank"
 bool(true)
 string(14) "basic-var-copy"
@@ -362,6 +405,10 @@ bool(true)
 string(22) "basic-string-edit-char"
 bool(true)
 string(27) "basic-string-edit-increment"
+bool(true)
+string(28) "basic-string-interned-char-1"
+bool(true)
+string(28) "basic-string-interned-char-2"
 bool(true)
 string(25) "basic-function-output-non"
 bool(true)
@@ -480,6 +527,8 @@ bool(true)
 string(31) "concat-array_fill-value-literal"
 bool(true)
 string(27) "concat-array_fill-value-non"
+bool(true)
+string(17) "sprintf-basic-chr"
 bool(true)
 string(23) "sprintf-basic-literal-1"
 bool(true)
