@@ -165,7 +165,7 @@ $db->prepare('SELECT * FROM users WHERE id = ' . $db->real_escape_string($id)); 
 
 **What about the performance impact?**
 
-Máté Kocsis has created a [php benchmark](https://github.com/kocsismate/php-version-benchmarks/) to replicate the old [Intel Tests](https://01.org/node/3774), the preliminary results found a 0.47% impact with the Symfony demo app (it did not connect to a database, as the variability introduced would make it impossible to measure the difference) - [Detailed Results](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/tests/results/lexer/benchmark.pdf).
+Máté Kocsis has created a [php benchmark](https://github.com/kocsismate/php-version-benchmarks/) to replicate the old [Intel Tests](https://01.org/node/3774), the preliminary results found a 0.47% impact with the Symfony demo app (it did not connect to a database, as the variability introduced would make it impossible to measure the difference).
 
 ### String Concatenation
 
