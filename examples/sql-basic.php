@@ -156,4 +156,36 @@
 	$db->query($sql, $parameters);
 
 
+//--------------------------------------------------
+// Example 3, with aliases.
+
+
+	$parameters = [];
+
+	$aliases = [
+			'with_1'  => sprintf('w1'), // Using sprintf to mark as a non-literal string
+			'table_1' => sprintf('user'),
+			'field_1' => sprintf('email'),
+			'field_2' => sprintf('dob'), // ... All of these are user defined fields.
+		];
+
+	$with_sql = '{with_1} AS (SELECT id, name, type, {field_1} as f1, deleted FROM {table_1})';
+
+	$sql = "
+		WITH
+			$with_sql
+		SELECT
+			t.name,
+			t.f1
+		FROM
+			{with_1} AS t
+		WHERE
+			t.type = ? AND
+			t.deleted IS NULL";
+
+	$parameters[] = ($_GET['type'] ?? 'admin');
+
+	$db->query($sql, $parameters, $aliases);
+
+
 ?>
