@@ -1,5 +1,5 @@
 diff --git a/Zend/zend_compile.c b/Zend/zend_compile.c
-index a762fe98f1b1..66ee81b3a8b1 100644
+index 100ac6563cb13..7c0a40fb3a065 100644
 --- a/Zend/zend_compile.c
 +++ b/Zend/zend_compile.c
 @@ -833,10 +833,12 @@ uint32_t zend_add_member_modifier(uint32_t flags, uint32_t new_flag) /* {{{ */
@@ -29,7 +29,7 @@ index a762fe98f1b1..66ee81b3a8b1 100644
  	} else {
  		return zend_string_copy(name);
  	}
-@@ -3819,7 +3825,21 @@ static zend_result zend_compile_func_is_scalar(znode *result, zend_ast_list *arg
+@@ -3826,7 +3832,21 @@ static zend_result zend_compile_func_is_scalar(znode *result, zend_ast_list *arg
  	opline = zend_emit_op_tmp(result, ZEND_TYPE_CHECK, &arg_node, NULL);
  	opline->extended_value = (1 << IS_FALSE | 1 << IS_TRUE | 1 << IS_DOUBLE | 1 << IS_LONG | 1 << IS_STRING);
  	return SUCCESS;
@@ -52,7 +52,7 @@ index a762fe98f1b1..66ee81b3a8b1 100644
  
  zend_result zend_compile_func_cast(znode *result, zend_ast_list *args, uint32_t type) /* {{{ */
  {
-@@ -4350,6 +4370,8 @@ zend_result zend_try_compile_special_func(znode *result, zend_string *lcname, ze
+@@ -4357,6 +4377,8 @@ zend_result zend_try_compile_special_func(znode *result, zend_string *lcname, ze
  		return zend_compile_func_typecheck(result, args, IS_RESOURCE);
  	} else if (zend_string_equals_literal(lcname, "is_scalar")) {
  		return zend_compile_func_is_scalar(result, args);
@@ -62,7 +62,7 @@ index a762fe98f1b1..66ee81b3a8b1 100644
  		return zend_compile_func_cast(result, args, _IS_BOOL);
  	} else if (zend_string_equals_literal(lcname, "intval")) {
 diff --git a/Zend/zend_language_scanner.l b/Zend/zend_language_scanner.l
-index b127c3bc6b80..fe2f79113788 100644
+index 1155f97d759c2..b7a3dc1033b99 100644
 --- a/Zend/zend_language_scanner.l
 +++ b/Zend/zend_language_scanner.l
 @@ -760,6 +760,15 @@ ZEND_API void zend_prepare_string_for_scanning(zval *str, zend_string *filename)
@@ -121,7 +121,7 @@ index b127c3bc6b80..fe2f79113788 100644
  	return SUCCESS;
  }
  
-@@ -2121,7 +2138,7 @@ string:
+@@ -2130,7 +2147,7 @@ string:
  
  <ST_VAR_OFFSET>{LNUM}|{HNUM}|{BNUM}|{ONUM} { /* Offset must be treated as a string */
  	if (yyleng == 1) {
@@ -130,7 +130,7 @@ index b127c3bc6b80..fe2f79113788 100644
  	} else {
  		ZVAL_STRINGL(zendlval, yytext, yyleng);
  	}
-@@ -2276,7 +2293,7 @@ inline_char_handler:
+@@ -2285,7 +2302,7 @@ inline_char_handler:
  			yyless(readsize);
  		}
  	} else if (yyleng == 1) {
@@ -139,7 +139,7 @@ index b127c3bc6b80..fe2f79113788 100644
  	} else {
  		ZVAL_STRINGL(zendlval, yytext, yyleng);
  	}
-@@ -2451,13 +2468,13 @@ inline_char_handler:
+@@ -2460,13 +2477,13 @@ inline_char_handler:
  
  	if (yyleng-bprefix-2 <= 1) {
  		if (yyleng-bprefix-2 < 1) {
@@ -155,7 +155,7 @@ index b127c3bc6b80..fe2f79113788 100644
  		}
  		goto skip_escape_conversion;
  	}
-@@ -2515,6 +2532,15 @@ skip_escape_conversion:
+@@ -2524,6 +2541,15 @@ skip_escape_conversion:
  		zend_string_release_ex(Z_STR_P(zendlval), 0);
  		ZVAL_STR(zendlval, new_str);
  	}
@@ -171,7 +171,7 @@ index b127c3bc6b80..fe2f79113788 100644
  	RETURN_TOKEN_WITH_VAL(T_CONSTANT_ENCAPSED_STRING);
  }
  
-@@ -3081,7 +3107,7 @@ emit_token_with_str:
+@@ -3090,7 +3116,7 @@ emit_token_with_str:
  emit_token_with_val:
  	if (PARSER_MODE()) {
  		ZEND_ASSERT(Z_TYPE_P(zendlval) != IS_UNDEF);
@@ -181,7 +181,7 @@ index b127c3bc6b80..fe2f79113788 100644
  
  emit_token:
 diff --git a/Zend/zend_operators.c b/Zend/zend_operators.c
-index 0849b9909cd9..d905e03d81f7 100644
+index 1db18168564a3..158e15815317a 100644
 --- a/Zend/zend_operators.c
 +++ b/Zend/zend_operators.c
 @@ -1870,10 +1870,15 @@ ZEND_API zend_result ZEND_FASTCALL concat_function(zval *result, zval *op1, zval
@@ -220,7 +220,7 @@ index 0849b9909cd9..d905e03d81f7 100644
  
  		/* This has to happen first to account for the cases where result == op1 == op2 and
 diff --git a/Zend/zend_string.c b/Zend/zend_string.c
-index d4a95ef3f34a..650b5cb487ea 100644
+index d4a95ef3f34a0..8e790770a4763 100644
 --- a/Zend/zend_string.c
 +++ b/Zend/zend_string.c
 @@ -41,7 +41,9 @@ static zend_new_interned_string_func_t interned_string_request_handler = zend_ne
@@ -288,15 +288,15 @@ index d4a95ef3f34a..650b5cb487ea 100644
  }
  
  static zend_always_inline zend_string *zend_interned_string_ht_lookup_ex(zend_ulong h, const char *str, size_t size, HashTable *interned_strings)
-@@ -130,7 +173,7 @@ static zend_always_inline zend_string *zend_interned_string_ht_lookup_ex(zend_ul
+@@ -129,7 +172,7 @@ static zend_always_inline zend_string *zend_interned_string_ht_lookup_ex(zend_ul
+ 	idx = HT_HASH(interned_strings, nIndex);
  	while (idx != HT_INVALID_IDX) {
  		p = HT_HASH_TO_BUCKET(interned_strings, idx);
- 		if ((p->h == h) && (ZSTR_LEN(p->key) == size)) {
--			if (!memcmp(ZSTR_VAL(p->key), str, size)) {
-+			if (!memcmp(ZSTR_VAL(p->key), str, size) && !ZSTR_IS_LITERAL(p->key)) {
+-		if ((p->h == h) && (ZSTR_LEN(p->key) == size)) {
++		if ((p->h == h) && (ZSTR_LEN(p->key) == size) && !ZSTR_IS_LITERAL(p->key)) {
+ 			if (!memcmp(ZSTR_VAL(p->key), str, size)) {
  				return p->key;
  			}
- 		}
 @@ -140,7 +183,7 @@ static zend_always_inline zend_string *zend_interned_string_ht_lookup_ex(zend_ul
  	return NULL;
  }
@@ -306,18 +306,19 @@ index d4a95ef3f34a..650b5cb487ea 100644
  {
  	zend_ulong h = ZSTR_H(str);
  	uint32_t nIndex;
-@@ -151,8 +194,8 @@ static zend_always_inline zend_string *zend_interned_string_ht_lookup(zend_strin
+@@ -151,8 +194,9 @@ static zend_always_inline zend_string *zend_interned_string_ht_lookup(zend_strin
  	idx = HT_HASH(interned_strings, nIndex);
  	while (idx != HT_INVALID_IDX) {
  		p = HT_HASH_TO_BUCKET(interned_strings, idx);
 -		if ((p->h == h) && zend_string_equal_content(p->key, str)) {
 -			return p->key;
-+		if ((p->h == h) && zend_string_equal_content(p->key, str) && (ZSTR_IS_LITERAL(p->key) == ZSTR_IS_LITERAL(str))) {
++		if ((p->h == h) && 
++			(ZSTR_IS_LITERAL(p->key) == ZSTR_IS_LITERAL(str)) && zend_string_equal_content(p->key, str)) {
 +			return p;
  		}
  		idx = Z_NEXT(p->val);
  	}
-@@ -160,20 +203,103 @@ static zend_always_inline zend_string *zend_interned_string_ht_lookup(zend_strin
+@@ -160,20 +204,103 @@ static zend_always_inline zend_string *zend_interned_string_ht_lookup(zend_strin
  	return NULL;
  }
  
@@ -423,7 +424,7 @@ index d4a95ef3f34a..650b5cb487ea 100644
  }
  
  ZEND_API zend_string* ZEND_FASTCALL zend_interned_string_find_permanent(zend_string *str)
-@@ -231,6 +357,8 @@ static zend_string* ZEND_FASTCALL zend_new_interned_string_request(zend_string *
+@@ -231,6 +358,8 @@ static zend_string* ZEND_FASTCALL zend_new_interned_string_request(zend_string *
  		return ret;
  	}
  
@@ -432,7 +433,7 @@ index d4a95ef3f34a..650b5cb487ea 100644
  	/* Create a short living interned, freed after the request. */
  #if ZEND_RC_DEBUG
  	if (zend_rc_debug) {
-@@ -247,6 +375,10 @@ static zend_string* ZEND_FASTCALL zend_new_interned_string_request(zend_string *
+@@ -247,6 +376,10 @@ static zend_string* ZEND_FASTCALL zend_new_interned_string_request(zend_string *
  	}
  
  	ret = zend_add_interned_string(str, &CG(interned_strings), 0);
@@ -444,7 +445,7 @@ index d4a95ef3f34a..650b5cb487ea 100644
  	return ret;
  }
 diff --git a/Zend/zend_string.h b/Zend/zend_string.h
-index b0205bd32d48..e94e5d08bb1a 100644
+index b0205bd32d48c..8f0b9f22ca0b3 100644
 --- a/Zend/zend_string.h
 +++ b/Zend/zend_string.h
 @@ -53,6 +53,9 @@ ZEND_API extern zend_string  *zend_empty_string;
@@ -467,7 +468,7 @@ index b0205bd32d48..e94e5d08bb1a 100644
  #define ZSTR_KNOWN(idx) zend_known_strings[idx]
  
  #define _ZSTR_HEADER_SIZE XtOffsetOf(zend_string, val)
-@@ -330,6 +335,55 @@ static zend_always_inline void zend_string_release_ex(zend_string *s, bool persi
+@@ -330,6 +335,53 @@ static zend_always_inline void zend_string_release_ex(zend_string *s, bool persi
  	}
  }
  
@@ -484,11 +485,9 @@ index b0205bd32d48..e94e5d08bb1a 100644
 +		return s;
 +	}
 +
-+	zend_string *literal = zend_string_dup(s, 0);
++	zend_string *literal = zend_string_separate(s, 0);
 +
 +	GC_TYPE_INFO(literal) |= IS_STR_LITERAL;
-+
-+	zend_string_release(s);
 +
 +	return literal;
 +}
@@ -503,9 +502,9 @@ index b0205bd32d48..e94e5d08bb1a 100644
 +		return s;
 +	}
 +
-+	zend_string *literal = zend_string_dup(s, 0);
++	zend_string *literal = zend_string_separate(s, 0);
 +
-+	zend_string_release(s);
++	GC_TYPE_INFO(literal) &= ~IS_STR_LITERAL;
 +
 +	return literal;
 +}
@@ -524,10 +523,10 @@ index b0205bd32d48..e94e5d08bb1a 100644
  BEGIN_EXTERN_C()
  ZEND_API bool ZEND_FASTCALL zend_string_equal_val(zend_string *s1, zend_string *s2);
 diff --git a/Zend/zend_types.h b/Zend/zend_types.h
-index 963362222d0e..4414e95ad984 100644
+index b9d013fbc1979..77c539d7b5118 100644
 --- a/Zend/zend_types.h
 +++ b/Zend/zend_types.h
-@@ -698,6 +698,7 @@ static zend_always_inline uint32_t zval_gc_info(uint32_t gc_type_info) {
+@@ -710,6 +710,7 @@ static zend_always_inline uint32_t zval_gc_info(uint32_t gc_type_info) {
  #define IS_STR_PERSISTENT			GC_PERSISTENT /* allocated using malloc */
  #define IS_STR_PERMANENT        	(1<<8)        /* relives request boundary */
  #define IS_STR_VALID_UTF8           (1<<9)        /* valid UTF-8 according to PCRE */
@@ -535,7 +534,7 @@ index 963362222d0e..4414e95ad984 100644
  
  /* array flags */
  #define IS_ARRAY_IMMUTABLE			GC_IMMUTABLE
-@@ -745,6 +746,9 @@ static zend_always_inline uint32_t zval_gc_info(uint32_t gc_type_info) {
+@@ -757,6 +758,9 @@ static zend_always_inline uint32_t zval_gc_info(uint32_t gc_type_info) {
  #define Z_PROTECT_RECURSION_P(zv)   Z_PROTECT_RECURSION(*(zv))
  #define Z_UNPROTECT_RECURSION_P(zv) Z_UNPROTECT_RECURSION(*(zv))
  
@@ -546,7 +545,7 @@ index 963362222d0e..4414e95ad984 100644
  #define Z_CONSTANT(zval)			(Z_TYPE(zval) == IS_CONSTANT_AST)
  #define Z_CONSTANT_P(zval_p)		Z_CONSTANT(*(zval_p))
 diff --git a/Zend/zend_vm_def.h b/Zend/zend_vm_def.h
-index 29991429abe9..39d66fb82299 100644
+index 43ccf271ea414..e5288cd0005ba 100644
 --- a/Zend/zend_vm_def.h
 +++ b/Zend/zend_vm_def.h
 @@ -408,6 +408,9 @@ ZEND_VM_HANDLER(8, ZEND_CONCAT, CONST|TMPVAR|CV, CONST|TMPVAR|CV, SPEC(NO_CONST_
@@ -649,7 +648,7 @@ index 29991429abe9..39d66fb82299 100644
  	ZEND_VM_NEXT_OPCODE();
  }
  
-@@ -4240,6 +4263,18 @@ ZEND_VM_COLD_HANDLER(201, ZEND_VERIFY_NEVER_TYPE, UNUSED, UNUSED)
+@@ -4241,6 +4264,18 @@ ZEND_VM_COLD_HANDLER(201, ZEND_VERIFY_NEVER_TYPE, UNUSED, UNUSED)
  	HANDLE_EXCEPTION();
  }
  
@@ -669,7 +668,7 @@ index 29991429abe9..39d66fb82299 100644
  {
  	USE_OPLINE
 diff --git a/Zend/zend_vm_execute.h b/Zend/zend_vm_execute.h
-index c698ad44967a..816e79fd3ccd 100644
+index 4e04a022eb501..0cdf30c1299c9 100644
 --- a/Zend/zend_vm_execute.h
 +++ b/Zend/zend_vm_execute.h
 @@ -3774,6 +3774,18 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_INIT_DYNAMIC_CALL_SPEC_TMPVAR_
@@ -721,7 +720,7 @@ index c698ad44967a..816e79fd3ccd 100644
  		memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  		memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  		ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -8410,6 +8431,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CONST_TMPVAR_HANDL
+@@ -8411,6 +8432,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CONST_TMPVAR_HANDL
  		    size_t len = ZSTR_LEN(op1_str);
  
  			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
@@ -731,7 +730,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
  			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
-@@ -8417,6 +8441,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CONST_TMPVAR_HANDL
+@@ -8418,6 +8442,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CONST_TMPVAR_HANDL
  			}
  		} else {
  			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -741,7 +740,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -8824,6 +8851,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_TMPVAR_
+@@ -8825,6 +8852,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_TMPVAR_
  		    size_t len = ZSTR_LEN(op1_str);
  
  			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
@@ -751,7 +750,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
  			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
-@@ -8831,6 +8861,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_TMPVAR_
+@@ -8832,6 +8862,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_TMPVAR_
  			}
  		} else {
  			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -761,7 +760,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -8891,6 +8924,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_TMPVAR_
+@@ -8892,6 +8925,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_TMPVAR_
  			}
  		}
  		str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -771,7 +770,7 @@ index c698ad44967a..816e79fd3ccd 100644
  		memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  		memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  		ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -10760,6 +10796,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CONST_CV_HANDLER(Z
+@@ -10763,6 +10799,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CONST_CV_HANDLER(Z
  		    size_t len = ZSTR_LEN(op1_str);
  
  			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
@@ -781,7 +780,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
  			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
-@@ -10767,6 +10806,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CONST_CV_HANDLER(Z
+@@ -10770,6 +10809,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CONST_CV_HANDLER(Z
  			}
  		} else {
  			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -791,7 +790,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -11174,6 +11216,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_CV_HAND
+@@ -11177,6 +11219,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_CV_HAND
  		    size_t len = ZSTR_LEN(op1_str);
  
  			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
@@ -801,7 +800,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
  			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
-@@ -11181,6 +11226,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_CV_HAND
+@@ -11184,6 +11229,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_CV_HAND
  			}
  		} else {
  			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -811,7 +810,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -11241,6 +11289,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_CV_HAND
+@@ -11244,6 +11292,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CONST_CV_HAND
  			}
  		}
  		str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -821,7 +820,7 @@ index c698ad44967a..816e79fd3ccd 100644
  		memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  		memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  		ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -14836,6 +14887,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_CONST_HANDL
+@@ -14840,6 +14891,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_CONST_HANDL
  		    size_t len = ZSTR_LEN(op1_str);
  
  			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
@@ -831,7 +830,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
  			if (IS_CONST & (IS_TMP_VAR|IS_VAR)) {
-@@ -14843,6 +14897,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_CONST_HANDL
+@@ -14847,6 +14901,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_CONST_HANDL
  			}
  		} else {
  			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -841,7 +840,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -15564,6 +15621,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CONST_
+@@ -15568,6 +15625,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CONST_
  		    size_t len = ZSTR_LEN(op1_str);
  
  			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
@@ -851,7 +850,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
  			if (IS_CONST & (IS_TMP_VAR|IS_VAR)) {
-@@ -15571,6 +15631,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CONST_
+@@ -15575,6 +15635,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CONST_
  			}
  		} else {
  			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -861,7 +860,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -15631,6 +15694,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CONST_
+@@ -15635,6 +15698,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CONST_
  			}
  		}
  		str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -871,7 +870,7 @@ index c698ad44967a..816e79fd3ccd 100644
  		memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  		memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  		ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -15641,6 +15707,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CONST_
+@@ -15645,6 +15711,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CONST_
  			zend_string_release_ex(op2_str, 0);
  		}
  	} while (0);
@@ -879,7 +878,7 @@ index c698ad44967a..816e79fd3ccd 100644
  	zval_ptr_dtor_nogc(EX_VAR(opline->op1.var));
  
  	ZEND_VM_NEXT_OPCODE_CHECK_EXCEPTION();
-@@ -16256,6 +16323,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_TMPVAR_HAND
+@@ -16260,6 +16327,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_TMPVAR_HAND
  		    size_t len = ZSTR_LEN(op1_str);
  
  			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
@@ -889,7 +888,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
  			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
-@@ -16263,6 +16333,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_TMPVAR_HAND
+@@ -16267,6 +16337,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_TMPVAR_HAND
  			}
  		} else {
  			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -899,7 +898,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -16984,6 +17057,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_TMPVAR
+@@ -16988,6 +17061,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_TMPVAR
  		    size_t len = ZSTR_LEN(op1_str);
  
  			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
@@ -909,7 +908,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
  			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
-@@ -16991,6 +17067,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_TMPVAR
+@@ -16995,6 +17071,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_TMPVAR
  			}
  		} else {
  			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -919,7 +918,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -17051,6 +17130,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_TMPVAR
+@@ -17055,6 +17134,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_TMPVAR
  			}
  		}
  		str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -929,7 +928,7 @@ index c698ad44967a..816e79fd3ccd 100644
  		memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  		memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  		ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -17061,6 +17143,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_TMPVAR
+@@ -17065,6 +17147,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_TMPVAR
  			zend_string_release_ex(op2_str, 0);
  		}
  	} while (0);
@@ -937,7 +936,7 @@ index c698ad44967a..816e79fd3ccd 100644
  	zval_ptr_dtor_nogc(EX_VAR(opline->op1.var));
  	zval_ptr_dtor_nogc(EX_VAR(opline->op2.var));
  	ZEND_VM_NEXT_OPCODE_CHECK_EXCEPTION();
-@@ -17930,6 +18013,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_CV_HANDLER(
+@@ -17934,6 +18017,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_CV_HANDLER(
  		    size_t len = ZSTR_LEN(op1_str);
  
  			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
@@ -947,7 +946,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
  			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
-@@ -17937,6 +18023,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_CV_HANDLER(
+@@ -17941,6 +18027,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_TMPVAR_CV_HANDLER(
  			}
  		} else {
  			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -957,7 +956,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -18296,6 +18385,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CV_HAN
+@@ -18300,6 +18389,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CV_HAN
  		    size_t len = ZSTR_LEN(op1_str);
  
  			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
@@ -967,7 +966,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
  			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
-@@ -18303,6 +18395,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CV_HAN
+@@ -18307,6 +18399,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CV_HAN
  			}
  		} else {
  			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -977,7 +976,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -18363,6 +18458,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CV_HAN
+@@ -18367,6 +18462,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CV_HAN
  			}
  		}
  		str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -987,7 +986,7 @@ index c698ad44967a..816e79fd3ccd 100644
  		memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  		memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  		ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -18373,6 +18471,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CV_HAN
+@@ -18377,6 +18475,7 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_TMPVAR_CV_HAN
  			zend_string_release_ex(op2_str, 0);
  		}
  	} while (0);
@@ -995,7 +994,7 @@ index c698ad44967a..816e79fd3ccd 100644
  	zval_ptr_dtor_nogc(EX_VAR(opline->op1.var));
  
  	ZEND_VM_NEXT_OPCODE_CHECK_EXCEPTION();
-@@ -19464,11 +19563,12 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_ADD_SPEC_TMP_CONST_HANDLE
+@@ -19468,11 +19567,12 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_ADD_SPEC_TMP_CONST_HANDLE
  static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_END_SPEC_TMP_CONST_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
  {
  	USE_OPLINE
@@ -1010,7 +1009,7 @@ index c698ad44967a..816e79fd3ccd 100644
  
  	rope = (zend_string**)EX_VAR(opline->op1.var);
  	if (IS_CONST == IS_CONST) {
-@@ -19504,16 +19604,22 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_END_SPEC_TMP_CONST_HANDLE
+@@ -19508,16 +19608,22 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_END_SPEC_TMP_CONST_HANDLE
  	for (i = 0; i <= opline->extended_value; i++) {
  		len += ZSTR_LEN(rope[i]);
  	}
@@ -1037,7 +1036,7 @@ index c698ad44967a..816e79fd3ccd 100644
  	ZEND_VM_NEXT_OPCODE();
  }
  
-@@ -19940,11 +20046,12 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_ADD_SPEC_TMP_TMPVAR_HANDL
+@@ -19944,11 +20050,12 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_ADD_SPEC_TMP_TMPVAR_HANDL
  static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_END_SPEC_TMP_TMPVAR_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
  {
  	USE_OPLINE
@@ -1052,7 +1051,7 @@ index c698ad44967a..816e79fd3ccd 100644
  
  	rope = (zend_string**)EX_VAR(opline->op1.var);
  	if ((IS_TMP_VAR|IS_VAR) == IS_CONST) {
-@@ -19980,16 +20087,22 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_END_SPEC_TMP_TMPVAR_HANDL
+@@ -19984,16 +20091,22 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_END_SPEC_TMP_TMPVAR_HANDL
  	for (i = 0; i <= opline->extended_value; i++) {
  		len += ZSTR_LEN(rope[i]);
  	}
@@ -1079,7 +1078,7 @@ index c698ad44967a..816e79fd3ccd 100644
  	ZEND_VM_NEXT_OPCODE();
  }
  
-@@ -20799,11 +20912,12 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_ADD_SPEC_TMP_CV_HANDLER(Z
+@@ -20803,11 +20916,12 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_ADD_SPEC_TMP_CV_HANDLER(Z
  static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_END_SPEC_TMP_CV_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
  {
  	USE_OPLINE
@@ -1094,7 +1093,7 @@ index c698ad44967a..816e79fd3ccd 100644
  
  	rope = (zend_string**)EX_VAR(opline->op1.var);
  	if (IS_CV == IS_CONST) {
-@@ -20839,16 +20953,22 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_END_SPEC_TMP_CV_HANDLER(Z
+@@ -20843,16 +20957,22 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ROPE_END_SPEC_TMP_CV_HANDLER(Z
  	for (i = 0; i <= opline->extended_value; i++) {
  		len += ZSTR_LEN(rope[i]);
  	}
@@ -1121,7 +1120,7 @@ index c698ad44967a..816e79fd3ccd 100644
  	ZEND_VM_NEXT_OPCODE();
  }
  
-@@ -39042,6 +39162,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_CONST_HANDLER(Z
+@@ -39054,6 +39174,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_CONST_HANDLER(Z
  		    size_t len = ZSTR_LEN(op1_str);
  
  			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
@@ -1131,7 +1130,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
  			if (IS_CONST & (IS_TMP_VAR|IS_VAR)) {
-@@ -39049,6 +39172,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_CONST_HANDLER(Z
+@@ -39061,6 +39184,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_CONST_HANDLER(Z
  			}
  		} else {
  			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -1141,7 +1140,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -41415,6 +41541,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CONST_HAND
+@@ -41427,6 +41553,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CONST_HAND
  		    size_t len = ZSTR_LEN(op1_str);
  
  			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
@@ -1151,7 +1150,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
  			if (IS_CONST & (IS_TMP_VAR|IS_VAR)) {
-@@ -41422,6 +41551,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CONST_HAND
+@@ -41434,6 +41563,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CONST_HAND
  			}
  		} else {
  			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -1161,7 +1160,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -41482,6 +41614,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CONST_HAND
+@@ -41494,6 +41626,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CONST_HAND
  			}
  		}
  		str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -1171,7 +1170,7 @@ index c698ad44967a..816e79fd3ccd 100644
  		memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  		memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  		ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -42724,6 +42859,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_TMPVAR_HANDLER(
+@@ -42736,6 +42871,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_TMPVAR_HANDLER(
  		    size_t len = ZSTR_LEN(op1_str);
  
  			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
@@ -1181,7 +1180,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
  			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
-@@ -42731,6 +42869,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_TMPVAR_HANDLER(
+@@ -42743,6 +42881,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_TMPVAR_HANDLER(
  			}
  		} else {
  			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -1191,7 +1190,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -45026,6 +45167,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_TMPVAR_HAN
+@@ -45038,6 +45179,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_TMPVAR_HAN
  		    size_t len = ZSTR_LEN(op1_str);
  
  			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
@@ -1201,7 +1200,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
  			if ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) {
-@@ -45033,6 +45177,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_TMPVAR_HAN
+@@ -45045,6 +45189,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_TMPVAR_HAN
  			}
  		} else {
  			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -1211,7 +1210,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -45093,6 +45240,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_TMPVAR_HAN
+@@ -45105,6 +45252,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_TMPVAR_HAN
  			}
  		}
  		str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -1221,7 +1220,7 @@ index c698ad44967a..816e79fd3ccd 100644
  		memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  		memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  		ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -47730,6 +47880,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_CV_HANDLER(ZEND
+@@ -47742,6 +47892,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_CV_HANDLER(ZEND
  		    size_t len = ZSTR_LEN(op1_str);
  
  			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
@@ -1231,7 +1230,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
  			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
-@@ -47737,6 +47890,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_CV_HANDLER(ZEND
+@@ -47749,6 +47902,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CONCAT_SPEC_CV_CV_HANDLER(ZEND
  			}
  		} else {
  			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -1241,7 +1240,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -50131,6 +50287,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CV_HANDLER
+@@ -50143,6 +50299,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CV_HANDLER
  		    size_t len = ZSTR_LEN(op1_str);
  
  			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
@@ -1251,7 +1250,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
  			if (IS_CV & (IS_TMP_VAR|IS_VAR)) {
-@@ -50138,6 +50297,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CV_HANDLER
+@@ -50150,6 +50309,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CV_HANDLER
  			}
  		} else {
  			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -1261,7 +1260,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -50198,6 +50360,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CV_HANDLER
+@@ -50210,6 +50372,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_FAST_CONCAT_SPEC_CV_CV_HANDLER
  			}
  		}
  		str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
@@ -1271,7 +1270,7 @@ index c698ad44967a..816e79fd3ccd 100644
  		memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
  		memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
  		ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
-@@ -53537,6 +53702,7 @@ ZEND_API void execute_ex(zend_execute_data *ex)
+@@ -53549,6 +53714,7 @@ ZEND_API void execute_ex(zend_execute_data *ex)
  			(void*)&&ZEND_CHECK_UNDEF_ARGS_SPEC_UNUSED_UNUSED_LABEL,
  			(void*)&&ZEND_FETCH_GLOBALS_SPEC_UNUSED_UNUSED_LABEL,
  			(void*)&&ZEND_VERIFY_NEVER_TYPE_SPEC_UNUSED_UNUSED_LABEL,
@@ -1279,7 +1278,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			(void*)&&ZEND_RECV_NOTYPE_SPEC_LABEL,
  			(void*)&&ZEND_JMP_FORWARD_SPEC_LABEL,
  			(void*)&&ZEND_NULL_LABEL,
-@@ -54830,6 +54996,10 @@ ZEND_API void execute_ex(zend_execute_data *ex)
+@@ -54842,6 +55008,10 @@ ZEND_API void execute_ex(zend_execute_data *ex)
  				VM_TRACE(ZEND_INIT_DYNAMIC_CALL_SPEC_TMPVAR)
  				ZEND_INIT_DYNAMIC_CALL_SPEC_TMPVAR_HANDLER(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU);
  				HYBRID_BREAK();
@@ -1290,7 +1289,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			HYBRID_CASE(ZEND_RECV_SPEC_UNUSED):
  				VM_TRACE(ZEND_RECV_SPEC_UNUSED)
  				ZEND_RECV_SPEC_UNUSED_HANDLER(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU);
-@@ -61577,6 +61747,7 @@ void zend_vm_init(void)
+@@ -61589,6 +61759,7 @@ void zend_vm_init(void)
  		ZEND_CHECK_UNDEF_ARGS_SPEC_UNUSED_UNUSED_HANDLER,
  		ZEND_FETCH_GLOBALS_SPEC_UNUSED_UNUSED_HANDLER,
  		ZEND_VERIFY_NEVER_TYPE_SPEC_UNUSED_UNUSED_HANDLER,
@@ -1298,7 +1297,7 @@ index c698ad44967a..816e79fd3ccd 100644
  		ZEND_RECV_NOTYPE_SPEC_HANDLER,
  		ZEND_JMP_FORWARD_SPEC_HANDLER,
  		ZEND_NULL_HANDLER,
-@@ -62685,7 +62856,8 @@ void zend_vm_init(void)
+@@ -62697,7 +62868,8 @@ void zend_vm_init(void)
  		2546,
  		2547,
  		2548,
@@ -1308,7 +1307,7 @@ index c698ad44967a..816e79fd3ccd 100644
  	};
  #if (ZEND_VM_KIND == ZEND_VM_KIND_HYBRID)
  	zend_opcode_handler_funcs = labels;
-@@ -62858,7 +63030,7 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+@@ -62870,7 +63042,7 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
  				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
  					break;
  				}
@@ -1317,7 +1316,7 @@ index c698ad44967a..816e79fd3ccd 100644
  				if (op->op1_type < op->op2_type) {
  					zend_swap_operands(op);
  				}
-@@ -62866,7 +63038,7 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+@@ -62878,7 +63050,7 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
  				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
  					break;
  				}
@@ -1326,7 +1325,7 @@ index c698ad44967a..816e79fd3ccd 100644
  				if (op->op1_type < op->op2_type) {
  					zend_swap_operands(op);
  				}
-@@ -62874,7 +63046,7 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+@@ -62886,7 +63058,7 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
  				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
  					break;
  				}
@@ -1335,7 +1334,7 @@ index c698ad44967a..816e79fd3ccd 100644
  				if (op->op1_type < op->op2_type) {
  					zend_swap_operands(op);
  				}
-@@ -62885,17 +63057,17 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+@@ -62897,17 +63069,17 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
  				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
  					break;
  				}
@@ -1356,7 +1355,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			}
  			break;
  		case ZEND_MUL:
-@@ -62906,17 +63078,17 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+@@ -62918,17 +63090,17 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
  				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
  					break;
  				}
@@ -1377,7 +1376,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			}
  			break;
  		case ZEND_IS_IDENTICAL:
-@@ -62927,14 +63099,14 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+@@ -62939,14 +63111,14 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
  				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
  					break;
  				}
@@ -1395,7 +1394,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			}
  			break;
  		case ZEND_IS_NOT_IDENTICAL:
-@@ -62945,14 +63117,14 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+@@ -62957,14 +63129,14 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
  				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
  					break;
  				}
@@ -1413,7 +1412,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			}
  			break;
  		case ZEND_IS_EQUAL:
-@@ -62963,12 +63135,12 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+@@ -62975,12 +63147,12 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
  				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
  					break;
  				}
@@ -1428,7 +1427,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			}
  			break;
  		case ZEND_IS_NOT_EQUAL:
-@@ -62979,12 +63151,12 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+@@ -62991,12 +63163,12 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
  				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
  					break;
  				}
@@ -1443,7 +1442,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			}
  			break;
  		case ZEND_IS_SMALLER:
-@@ -62992,12 +63164,12 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+@@ -63004,12 +63176,12 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
  				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
  					break;
  				}
@@ -1458,7 +1457,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			}
  			break;
  		case ZEND_IS_SMALLER_OR_EQUAL:
-@@ -63005,74 +63177,74 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+@@ -63017,74 +63189,74 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
  				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
  					break;
  				}
@@ -1551,7 +1550,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			}
  			break;
  		case ZEND_FETCH_DIM_R:
-@@ -63080,17 +63252,17 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
+@@ -63092,17 +63264,17 @@ ZEND_API void ZEND_FASTCALL zend_vm_set_opcode_handler_ex(zend_op* op, uint32_t
  				if (op->op1_type == IS_CONST && op->op2_type == IS_CONST) {
  					break;
  				}
@@ -1573,7 +1572,7 @@ index c698ad44967a..816e79fd3ccd 100644
  			break;
  		case ZEND_BW_OR:
 diff --git a/Zend/zend_vm_handlers.h b/Zend/zend_vm_handlers.h
-index 8e500da57cbf..2a1bec8e2e7d 100644
+index 8e500da57cbf3..2a1bec8e2e7d2 100644
 --- a/Zend/zend_vm_handlers.h
 +++ b/Zend/zend_vm_handlers.h
 @@ -1354,498 +1354,499 @@
@@ -2535,7 +2534,7 @@ index 8e500da57cbf..2a1bec8e2e7d 100644
 +	_(3452, ZEND_FE_FETCH_R_SIMPLE_SPEC_VAR_CV_RETVAL_USED) \
 +	_(3452+1, ZEND_NULL)
 diff --git a/Zend/zend_vm_opcodes.c b/Zend/zend_vm_opcodes.c
-index 83c351780775..0b866aa0183f 100644
+index 83c3517807755..0b866aa0183f7 100644
 --- a/Zend/zend_vm_opcodes.c
 +++ b/Zend/zend_vm_opcodes.c
 @@ -22,7 +22,7 @@
@@ -2568,7 +2567,7 @@ index 83c351780775..0b866aa0183f 100644
  
  ZEND_API const char* ZEND_FASTCALL zend_get_opcode_name(zend_uchar opcode) {
 diff --git a/Zend/zend_vm_opcodes.h b/Zend/zend_vm_opcodes.h
-index 94e74c0a57f1..964757142d80 100644
+index 94e74c0a57f12..964757142d809 100644
 --- a/Zend/zend_vm_opcodes.h
 +++ b/Zend/zend_vm_opcodes.h
 @@ -285,7 +285,8 @@ END_EXTERN_C()
@@ -2582,7 +2581,7 @@ index 94e74c0a57f1..964757142d80 100644
  
  #endif
 diff --git a/ext/opcache/ZendAccelerator.c b/ext/opcache/ZendAccelerator.c
-index a301888815b2..97970c18abbe 100644
+index a301888815b25..7afa1874ba1e8 100644
 --- a/ext/opcache/ZendAccelerator.c
 +++ b/ext/opcache/ZendAccelerator.c
 @@ -427,7 +427,7 @@ static void accel_interned_strings_save_state(void)
@@ -2594,25 +2593,27 @@ index a301888815b2..97970c18abbe 100644
  	zend_ulong   h;
  	uint32_t     pos;
  	zend_string *s;
-@@ -451,7 +451,7 @@ static zend_always_inline zend_string *accel_find_interned_string(zend_string *s
+@@ -451,7 +451,8 @@ static zend_always_inline zend_string *accel_find_interned_string(zend_string *s
  	if (EXPECTED(pos != STRTAB_INVALID_POS)) {
  		do {
  			s = STRTAB_POS_TO_STR(&ZCSG(interned_strings), pos);
 -			if (EXPECTED(ZSTR_H(s) == h) && zend_string_equal_content(s, str)) {
-+			if (EXPECTED(ZSTR_H(s) == h) && zend_string_equal_content(s, str) && (ZSTR_IS_LITERAL(s) == ZSTR_IS_LITERAL(str))) {
++			if (EXPECTED(ZSTR_H(s) == h) &&
++				(ZSTR_IS_LITERAL(s) == ZSTR_IS_LITERAL(str)) && zend_string_equal_content(s, str)) {
  				return s;
  			}
  			pos = STRTAB_COLLISION(s);
-@@ -484,7 +484,7 @@ zend_string* ZEND_FASTCALL accel_new_interned_string(zend_string *str)
+@@ -484,7 +485,8 @@ zend_string* ZEND_FASTCALL accel_new_interned_string(zend_string *str)
  	if (EXPECTED(pos != STRTAB_INVALID_POS)) {
  		do {
  			s = STRTAB_POS_TO_STR(&ZCSG(interned_strings), pos);
 -			if (EXPECTED(ZSTR_H(s) == h) && zend_string_equal_content(s, str)) {
-+			if (EXPECTED(ZSTR_H(s) == h) && zend_string_equal_content(s, str) && (ZSTR_IS_LITERAL(s) == ZSTR_IS_LITERAL(str))) {
++			if (EXPECTED(ZSTR_H(s) == h) &&
++				(ZSTR_IS_LITERAL(s) == ZSTR_IS_LITERAL(str)) && zend_string_equal_content(s, str)) {
  				zend_string_release(str);
  				return s;
  			}
-@@ -506,6 +506,9 @@ zend_string* ZEND_FASTCALL accel_new_interned_string(zend_string *str)
+@@ -506,6 +508,9 @@ zend_string* ZEND_FASTCALL accel_new_interned_string(zend_string *str)
  	*hash_slot = STRTAB_STR_TO_POS(&ZCSG(interned_strings), s);
  	GC_SET_REFCOUNT(s, 2);
  	GC_TYPE_INFO(s) = GC_STRING | ((IS_STR_INTERNED | IS_STR_PERMANENT) << GC_FLAGS_SHIFT);
@@ -2622,7 +2623,7 @@ index a301888815b2..97970c18abbe 100644
  	ZSTR_H(s) = h;
  	ZSTR_LEN(s) = ZSTR_LEN(str);
  	memcpy(ZSTR_VAL(s), ZSTR_VAL(str), ZSTR_LEN(s) + 1);
-@@ -1379,6 +1382,9 @@ static zend_string* accel_new_interned_key(zend_string *key)
+@@ -1379,6 +1384,9 @@ static zend_string* accel_new_interned_key(zend_string *key)
  			ZSTR_H(new_key) = ZSTR_H(key);
  			ZSTR_LEN(new_key) = ZSTR_LEN(key);
  			memcpy(ZSTR_VAL(new_key), ZSTR_VAL(key), ZSTR_LEN(new_key) + 1);
@@ -2633,7 +2634,7 @@ index a301888815b2..97970c18abbe 100644
  	}
  	return new_key;
 diff --git a/ext/opcache/jit/zend_jit_helpers.c b/ext/opcache/jit/zend_jit_helpers.c
-index 5f1bf7b901bc..55a0ddcd8dde 100644
+index 2c133a751e7f0..db30786b0fe32 100644
 --- a/ext/opcache/jit/zend_jit_helpers.c
 +++ b/ext/opcache/jit/zend_jit_helpers.c
 @@ -1182,24 +1182,35 @@ static void ZEND_FASTCALL zend_jit_fast_assign_concat_helper(zval *op1, zval *op
@@ -2683,10 +2684,10 @@ index 5f1bf7b901bc..55a0ddcd8dde 100644
  	ZVAL_NEW_STR(result, result_str);
  
 diff --git a/ext/standard/basic_functions.stub.php b/ext/standard/basic_functions.stub.php
-index db9b0148c428..30557cb4cef4 100755
+index f81f454129141..b0eed538c9e50 100755
 --- a/ext/standard/basic_functions.stub.php
 +++ b/ext/standard/basic_functions.stub.php
-@@ -1424,6 +1424,8 @@ function is_object(mixed $value): bool {}
+@@ -1425,6 +1425,8 @@ function is_object(mixed $value): bool {}
  
  function is_scalar(mixed $value): bool {}
  
@@ -2696,7 +2697,7 @@ index db9b0148c428..30557cb4cef4 100755
  function is_callable(mixed $value, bool $syntax_only = false, &$callable_name = null): bool {}
  
 diff --git a/ext/standard/basic_functions_arginfo.h b/ext/standard/basic_functions_arginfo.h
-index e4ee7fc11220..af80bd9cb487 100644
+index 238b66dee4c11..daf6f8408df3e 100644
 --- a/ext/standard/basic_functions_arginfo.h
 +++ b/ext/standard/basic_functions_arginfo.h
 @@ -2087,6 +2087,8 @@ ZEND_END_ARG_INFO()
@@ -2725,7 +2726,7 @@ index e4ee7fc11220..af80bd9cb487 100644
  	ZEND_FE(is_iterable, arginfo_is_iterable)
  	ZEND_FE(is_countable, arginfo_is_countable)
 diff --git a/ext/standard/string.c b/ext/standard/string.c
-index 1ce7bfee0e91..903ffb4e2633 100644
+index 1ce7bfee0e915..903ffb4e26333 100644
 --- a/ext/standard/string.c
 +++ b/ext/standard/string.c
 @@ -1144,6 +1144,8 @@ PHPAPI void php_implode(const zend_string *glue, HashTable *pieces, zval *return
@@ -2834,7 +2835,7 @@ index 1ce7bfee0e91..903ffb4e2633 100644
  /* }}} */
 diff --git a/ext/standard/tests/strings/literals/001.phpt b/ext/standard/tests/strings/literals/001.phpt
 new file mode 100644
-index 000000000000..6adcb113d040
+index 0000000000000..6adcb113d040d
 --- /dev/null
 +++ b/ext/standard/tests/strings/literals/001.phpt
 @@ -0,0 +1,13 @@
@@ -2853,7 +2854,7 @@ index 000000000000..6adcb113d040
 +bool(false)
 diff --git a/ext/standard/tests/strings/literals/002.phpt b/ext/standard/tests/strings/literals/002.phpt
 new file mode 100644
-index 000000000000..d169233e834f
+index 0000000000000..d169233e834f5
 --- /dev/null
 +++ b/ext/standard/tests/strings/literals/002.phpt
 @@ -0,0 +1,16 @@
@@ -2875,7 +2876,7 @@ index 000000000000..d169233e834f
 +
 diff --git a/ext/standard/tests/strings/literals/003.phpt b/ext/standard/tests/strings/literals/003.phpt
 new file mode 100644
-index 000000000000..04980206e0df
+index 0000000000000..04980206e0df7
 --- /dev/null
 +++ b/ext/standard/tests/strings/literals/003.phpt
 @@ -0,0 +1,52 @@
@@ -2933,7 +2934,7 @@ index 000000000000..04980206e0df
 +bool(false)
 diff --git a/ext/standard/tests/strings/literals/004.phpt b/ext/standard/tests/strings/literals/004.phpt
 new file mode 100644
-index 000000000000..83771ec195ab
+index 0000000000000..83771ec195ab3
 --- /dev/null
 +++ b/ext/standard/tests/strings/literals/004.phpt
 @@ -0,0 +1,28 @@
@@ -2967,7 +2968,7 @@ index 000000000000..83771ec195ab
 +bool(false)
 diff --git a/ext/standard/tests/strings/literals/005.phpt b/ext/standard/tests/strings/literals/005.phpt
 new file mode 100644
-index 000000000000..71b8921e66b0
+index 0000000000000..71b8921e66b0d
 --- /dev/null
 +++ b/ext/standard/tests/strings/literals/005.phpt
 @@ -0,0 +1,79 @@
@@ -3052,7 +3053,7 @@ index 000000000000..71b8921e66b0
 +bool(true)
 diff --git a/ext/standard/tests/strings/literals/006.phpt b/ext/standard/tests/strings/literals/006.phpt
 new file mode 100644
-index 000000000000..ea78393c61bf
+index 0000000000000..ea78393c61bf6
 --- /dev/null
 +++ b/ext/standard/tests/strings/literals/006.phpt
 @@ -0,0 +1,30 @@
@@ -3088,7 +3089,7 @@ index 000000000000..ea78393c61bf
 +bool(false)
 diff --git a/ext/standard/tests/strings/literals/007.phpt b/ext/standard/tests/strings/literals/007.phpt
 new file mode 100644
-index 000000000000..8beb27566981
+index 0000000000000..8beb27566981d
 --- /dev/null
 +++ b/ext/standard/tests/strings/literals/007.phpt
 @@ -0,0 +1,17 @@
@@ -3111,7 +3112,7 @@ index 000000000000..8beb27566981
 +bool(false)
 diff --git a/ext/standard/tests/strings/literals/008.phpt b/ext/standard/tests/strings/literals/008.phpt
 new file mode 100644
-index 000000000000..b9bf440fcae1
+index 0000000000000..b9bf440fcae1b
 --- /dev/null
 +++ b/ext/standard/tests/strings/literals/008.phpt
 @@ -0,0 +1,59 @@
@@ -3176,7 +3177,7 @@ index 000000000000..b9bf440fcae1
 +bool(true)
 diff --git a/ext/standard/tests/strings/literals/009.phpt b/ext/standard/tests/strings/literals/009.phpt
 new file mode 100644
-index 000000000000..e9cbd71e2428
+index 0000000000000..e9cbd71e2428f
 --- /dev/null
 +++ b/ext/standard/tests/strings/literals/009.phpt
 @@ -0,0 +1,42 @@
@@ -3224,7 +3225,7 @@ index 000000000000..e9cbd71e2428
 +bool(true)
 diff --git a/ext/standard/tests/strings/literals/010.phpt b/ext/standard/tests/strings/literals/010.phpt
 new file mode 100644
-index 000000000000..71d9e9427c69
+index 0000000000000..71d9e9427c693
 --- /dev/null
 +++ b/ext/standard/tests/strings/literals/010.phpt
 @@ -0,0 +1,29 @@
@@ -3259,7 +3260,7 @@ index 000000000000..71d9e9427c69
 +bool(true)
 diff --git a/ext/standard/tests/strings/literals/011.phpt b/ext/standard/tests/strings/literals/011.phpt
 new file mode 100644
-index 000000000000..e1b6aa454c15
+index 0000000000000..e1b6aa454c154
 --- /dev/null
 +++ b/ext/standard/tests/strings/literals/011.phpt
 @@ -0,0 +1,19 @@
@@ -3284,7 +3285,7 @@ index 000000000000..e1b6aa454c15
 +bool(true)
 diff --git a/ext/standard/tests/strings/literals/013.phpt b/ext/standard/tests/strings/literals/013.phpt
 new file mode 100644
-index 000000000000..778a043ee234
+index 0000000000000..778a043ee234c
 --- /dev/null
 +++ b/ext/standard/tests/strings/literals/013.phpt
 @@ -0,0 +1,40 @@
@@ -3330,7 +3331,7 @@ index 000000000000..778a043ee234
 +bool(false)
 diff --git a/ext/standard/tests/strings/literals/014.phpt b/ext/standard/tests/strings/literals/014.phpt
 new file mode 100644
-index 000000000000..e65d36f55be8
+index 0000000000000..e65d36f55be84
 --- /dev/null
 +++ b/ext/standard/tests/strings/literals/014.phpt
 @@ -0,0 +1,21 @@
@@ -3356,7 +3357,7 @@ index 000000000000..e65d36f55be8
 +bool(false)
 +bool(false)
 diff --git a/ext/standard/type.c b/ext/standard/type.c
-index 93df434fe310..7b25acca4c93 100644
+index 93df434fe310e..7b25acca4c93b 100644
 --- a/ext/standard/type.c
 +++ b/ext/standard/type.c
 @@ -397,6 +397,19 @@ PHP_FUNCTION(is_scalar)
