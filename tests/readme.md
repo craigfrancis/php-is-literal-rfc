@@ -1,18 +1,21 @@
 
-Clone `github.com/php/php-src` into the './src/a/' folder.
+Apply the patch to the PHP source:
 
-Make a copy in './src/b/' and  './src/c/'.
+	cd src/php-8.1.0RC2
 
-Then apply the patches (with or without supporting string concat).
+    patch --dry-run -p1 < ../../patches/8.1.0RC2-main.diff
 
-Then compile them:
+    patch -p1 < ../../patches/8.1.0RC2-main.diff
+    patch -p1 < ../../patches/8.1.0RC2-tests.diff
+
+    php Zend/zend_vm_gen.php
+
+Then compile.
 
 Might need to brew install: icu4c, mhash
 
 ```
 brew install bison re2c libiconv;
-
-cd ./src/a/;
 
 export PATH="/usr/local/opt/bison/bin:$PATH" && \
 export PKG_CONFIG_PATH="/usr/local/opt/openssl/lib/pkgconfig:/usr/local/opt/icu4c/lib/pkgconfig" && \
