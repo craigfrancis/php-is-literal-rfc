@@ -1,5 +1,5 @@
 
-Apply the patch and compile ([notes](../patches/install.md)).
+Apply the patch and compile ([notes](../patches/readme.md)).
 
 ---
 
