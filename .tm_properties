@@ -1,3 +1,0 @@
-
-excludeInFolderSearch = "{$excludeInFolderSearch,src}"
-excludeInFileChooser = "$excludeInFolderSearch";
