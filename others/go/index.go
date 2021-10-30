@@ -1,3 +1,9 @@
+/*
+
+go run index.go
+
+*/
+
 package main
 
 import "bufio"
@@ -14,7 +20,7 @@ func main() {
 	a := StringConstant("<p>Hello ")
 	b := StringConstant(your_name)
 
-	// ./index.go:15:21: cannot use your_name (type string) as type stringConstant in argument to StringConstant
+	// cannot use your_name (type string) as type stringConstant in argument to StringConstant
 
 	fmt.Printf(a)
 	fmt.Printf("\n")
@@ -25,6 +31,12 @@ func main() {
 
 }
 
+// A name is *exported* if it begins with a capital letter.
+//
+// stringConstant is an unexported string type. Users of this package cannot
+// create values of this type except by passing an untyped string constant to
+// functions which expect a stringConstant. This type should only be used in
+// function and method parameters.
 type stringConstant string
 
 func StringConstant(v stringConstant) string {
