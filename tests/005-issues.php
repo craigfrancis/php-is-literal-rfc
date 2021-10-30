@@ -12,4 +12,24 @@
 
 	var_dump($sql, is_literal($sql));
 
+//--------------------------------------------------
+
+	$b = 'BBB';
+
+	$array = [
+			// 'XXX',
+			'AAA ' . $b,
+			'CCC',
+		];
+
+	$sql = '';
+	foreach ($array as $part) {
+		if ($sql !== '') {
+			$sql .= ' / ';
+			var_dump([$sql, is_literal($sql)]);
+		}
+		$sql .= $part;
+		var_dump([$sql, is_literal($sql)]);
+	}
+
 ?>
