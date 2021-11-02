@@ -17,10 +17,10 @@ func main() {
 	your_name, _ := reader.ReadString('\n')
 	your_name = your_name[:len(your_name)-1]
 
-	a := StringConstant("<p>Hello ")
-	b := StringConstant(your_name)
+	a := OnlyAcceptsStringConstant("<p>Hello ")
+	b := OnlyAcceptsStringConstant(your_name)
 
-	// cannot use your_name (type string) as type stringConstant in argument to StringConstant
+	// cannot use your_name (type string) as type stringConstant in argument to OnlyAcceptsStringConstant
 
 	fmt.Printf(a)
 	fmt.Printf("\n")
@@ -39,6 +39,6 @@ func main() {
 // function and method parameters.
 type stringConstant string
 
-func StringConstant(v stringConstant) string {
+func OnlyAcceptsStringConstant(v stringConstant) string {
 	return string(v)
 }
