@@ -14,7 +14,6 @@ import "os"
 import "fmt"
 
 import "github.com/google/safehtml"
-import "github.com/google/safehtml/legacyconversions"
 import "github.com/google/safehtml/template"
 
 func main() {
@@ -54,9 +53,9 @@ func main() {
 
 	//--------------------------------------------------
 
-	a := legacyconversions.RiskilyAssumeHTML("<p>Hello ")
+	a := template.MustParseAndExecuteToHTML("<p>Hello ")
 	b := safehtml.HTMLEscaped(your_name)
-	c := legacyconversions.RiskilyAssumeHTML("</p>")
+	c := template.MustParseAndExecuteToHTML("</p>")
 
 	para_1 := safehtml.HTMLConcat(a, b, c)
 
