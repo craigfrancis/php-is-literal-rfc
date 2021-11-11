@@ -1,5 +1,5 @@
 /*
-  npm i is-template-object;
+  npm install is-template-object;
   node index.js;
 */
 
