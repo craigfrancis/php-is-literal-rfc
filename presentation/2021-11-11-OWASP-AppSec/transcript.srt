@@ -1,0 +1,3261 @@
+1
+00:00:00,150 --> 00:00:03,360
+CRAIG FRANCIS: And today we're going to
+talk about ending injection vulnerabilities.
+
+2
+00:00:04,170 --> 00:00:07,110
+We're going to briefly cover
+injection vulnerabilities, we'll talk
+
+3
+00:00:07,110 --> 00:00:11,610
+about how taint checking can help or
+not, a special type of string,
+
+4
+00:00:12,210 --> 00:00:17,550
+handling some oddities, examples you
+can use today and Go, Node,
+
+5
+00:00:17,550 --> 00:00:22,470
+JavaScript, Java, and PHP, and also
+cover the future.
+
+6
+00:00:22,770 --> 00:00:27,730
+And what we can hopefully be able to
+do in, let's say, 10 years time. The
+
+7
+00:00:27,730 --> 00:00:32,470
+main thing we're going to be talking
+about is this quote from Mike Samuel,
+
+8
+00:00:32,980 --> 00:00:36,640
+which is, "Distinguishing strings
+from a trusted developer, from
+
+9
+00:00:36,640 --> 00:00:40,300
+strings that may be attacker
+controlled." By using this
+
+10
+00:00:40,300 --> 00:00:43,840
+distinction, we can actually stop
+injection vulnerabilities from
+
+11
+00:00:43,840 --> 00:00:49,900
+happening. This is based on the work
+from Christoph Kern, who did a talk
+
+12
+00:00:49,930 --> 00:00:56,010
+called Preventing Security Bugs
+through Software Design. This was a
+
+13
+00:00:56,030 --> 00:01:01,410
+USENIX Security 2015, and AppSec
+California 2016. The link is the link
+
+14
+00:01:01,410 --> 00:01:08,330
+to the second talk, which contains a
+few extra details. It also involves
+
+15
+00:01:08,340 --> 00:01:14,400
+information from the book created by
+some Google engineers called Building
+
+16
+00:01:14,400 --> 00:01:20,010
+Secure and Reliable Systems. Just
+released in March 2020, and the
+
+17
+00:01:20,010 --> 00:01:23,250
+section if you were going to read
+along is under the Common Security
+
+18
+00:01:23,250 --> 00:01:29,730
+Vulnerabilities chapter, starting at
+page 266. Also like to give thanks to
+
+19
+00:01:29,730 --> 00:01:34,680
+Toby Fox for our lead actors. Undyne,
+defender, and Spamton, our attacker.
+
+20
+00:01:36,150 --> 00:01:40,920
+Ok, so injection vulnerabilities as
+we are a OS, we probably know these
+
+21
+00:01:40,920 --> 00:01:45,870
+bit too well. But anyway, we're going
+to start with a very simple select
+
+22
+00:01:45,870 --> 00:01:51,660
+statement for our database, and the
+developers incorrectly appended user
+
+23
+00:01:51,660 --> 00:01:57,480
+data onto the end. Developer expects
+this to work and it kind of does work
+
+24
+00:01:57,480 --> 00:02:02,070
+most of the time. The problem comes
+when the attacker comes in and starts
+
+25
+00:02:02,070 --> 00:02:06,930
+appending their own SQL onto the end
+of it. So in this case, we're taking
+
+26
+00:02:06,930 --> 00:02:11,760
+from the user table and we're saying
+where the ID is equal to minus one,
+
+27
+00:02:11,760 --> 00:02:16,680
+which probably won't return anything.
+And then appending onto the end of
+
+28
+00:02:16,680 --> 00:02:20,610
+that query, we're using Union to
+select additional records from the
+
+29
+00:02:20,610 --> 00:02:26,070
+admin table, and we probably don't
+want Spamton, our attacker, to read
+
+30
+00:02:26,070 --> 00:02:29,190
+that information.
+
+31
+00:02:29,190 --> 00:02:32,670
+This is how are we supposed to do it
+today with parameterized queries
+
+32
+00:02:32,880 --> 00:02:37,740
+where you would write the SQL as a
+developer defined string, you send
+
+33
+00:02:37,740 --> 00:02:42,360
+that to the database. The database
+parses it and creates its query
+
+34
+00:02:42,360 --> 00:02:44,180
+execution plan.
+
+35
+00:02:44,180 --> 00:02:49,770
+As a separate step, the question
+marks in this case are replaced with
+
+36
+00:02:49,770 --> 00:02:55,360
+the user data, which is the IDs they
+come in second, and that works.
+
+37
+00:02:55,360 --> 00:03:01,440
+Great. Another approach that we can
+use is database abstractions. This is
+
+38
+00:03:01,440 --> 00:03:05,970
+where developers don't really want to
+be writing their own SQL. Doesn't
+
+39
+00:03:05,970 --> 00:03:10,380
+scale. It's a bit complicated, and
+the database abstractions can make
+
+40
+00:03:10,380 --> 00:03:11,670
+things easier.
+
+41
+00:03:13,060 --> 00:03:18,190
+In this case, we're going to be
+looking at a very simple query, which
+
+42
+00:03:18,190 --> 00:03:22,720
+was looking at the articles table,
+and we just see it simply saying we
+
+43
+00:03:22,720 --> 00:03:29,350
+want to return the articles where the
+author is variable I.D. Another
+
+44
+00:03:29,350 --> 00:03:35,080
+approach, you know, same API, is you
+would be saying, OK, where the author
+
+45
+00:03:35,080 --> 00:03:42,160
+ID is null and you notice there's no
+user input on this one. You can also
+
+46
+00:03:42,160 --> 00:03:47,290
+do things like functions, function
+calls. So this is not the most
+
+47
+00:03:47,290 --> 00:03:51,460
+efficient way of doing it because it
+kind of breaks the index. But by
+
+48
+00:03:51,460 --> 00:03:56,140
+using the date function, you can
+remove the time from the published
+
+49
+00:03:56,140 --> 00:03:59,800
+field and then you'll be able to
+return articles that are published on
+
+50
+00:03:59,800 --> 00:04:03,560
+a particular date. And that's all
+good.
+
+51
+00:04:05,590 --> 00:04:09,210
+Let's take this  a little bit
+further, and we're starting off with
+
+52
+00:04:09,210 --> 00:04:13,860
+a query which simply returns articles
+with the word count of greater than a
+
+53
+00:04:13,860 --> 00:04:17,910
+thousand. You could imagine this
+being here for listing the articles,
+
+54
+00:04:17,910 --> 00:04:23,370
+which are long, you know, the long
+form articles, but what defines a
+
+55
+00:04:23,370 --> 00:04:27,450
+long article might depend on the
+person. So there may be a request to
+
+56
+00:04:27,450 --> 00:04:32,240
+come in to say, Well, I want to be
+able to customize this. The correct
+
+57
+00:04:32,240 --> 00:04:36,530
+way of doing it, if you understood
+the database extraction correctly,
+
+58
+00:04:36,530 --> 00:04:41,090
+you'd read all the documentation, you
+weren't making any mistakes, is you
+
+59
+00:04:41,090 --> 00:04:45,020
+would provide them as two separate
+values again. First of all, you would
+
+60
+00:04:45,020 --> 00:04:49,000
+say word count is greater than.
+
+61
+00:04:49,000 --> 00:04:52,580
+That's the developer to find string.
+And then as a separate part, you
+
+62
+00:04:52,580 --> 00:04:54,310
+provide the count.
+
+63
+00:04:54,310 --> 00:04:59,820
+Again, nice and simple. But the sort
+of mistakes that can happen can be
+
+64
+00:04:59,820 --> 00:05:03,810
+like this where they haven't
+provided-- the developer hasn't
+
+65
+00:05:03,810 --> 00:05:09,760
+provided it as two separate arguments
+and instead used concatenation. Now,
+
+66
+00:05:09,760 --> 00:05:14,470
+the database obstruction has no idea
+this happened. It's just going to
+
+67
+00:05:14,470 --> 00:05:19,240
+accept, but because it came in as the
+first argument that it can be trusted
+
+68
+00:05:19,390 --> 00:05:24,490
+and puts it straight into the SQL,
+and this is the main problem because
+
+69
+00:05:24,490 --> 00:05:28,750
+the library code is usually
+well-tested, well-understood and
+
+70
+00:05:28,750 --> 00:05:34,420
+works perfectly. But the vast
+majority of problems are actually due
+
+71
+00:05:34,420 --> 00:05:39,520
+to the developer using the library.
+It's the input to the library and
+
+72
+00:05:39,520 --> 00:05:42,760
+that's where we need to sort of
+focus. In this case, we can give you
+
+73
+00:05:42,760 --> 00:05:48,220
+a quick example where Spamton has
+just simply not given a count, but
+
+74
+00:05:48,220 --> 00:05:51,970
+has done, you know, is word count
+greater than word count, which is
+
+75
+00:05:51,970 --> 00:05:55,690
+false. You can't have something
+that's greater than itself, and then
+
+76
+00:05:55,690 --> 00:06:00,160
+it's doing the classic union and then
+selecting additional records from the
+
+77
+00:06:00,160 --> 00:06:06,730
+admin table. Another example is a
+database abstraction that allows you
+
+78
+00:06:06,730 --> 00:06:12,190
+to specify the order as just a single
+argument. And this does actually come
+
+79
+00:06:12,190 --> 00:06:16,840
+up quite often because you often have
+tables of results which are sortable
+
+80
+00:06:16,840 --> 00:06:22,510
+by the user, and it's so much easier
+just by just simply providing the
+
+81
+00:06:22,510 --> 00:06:26,470
+value that is in, let's say, the URL
+straight into the database
+
+82
+00:06:26,470 --> 00:06:32,560
+abstraction. And because ordering
+doesn't necessarily refer to a single
+
+83
+00:06:32,560 --> 00:06:38,350
+field as in in this case, the first
+name followed by the last name it
+
+84
+00:06:38,350 --> 00:06:43,150
+gets, it's not really properly
+checked a lot of the time. So in this
+
+85
+00:06:43,150 --> 00:06:47,950
+case, the developer is expecting the
+order by name first, followed by name
+
+86
+00:06:47,950 --> 00:06:51,040
+last. But Spamton can do this.
+
+87
+00:06:51,490 --> 00:06:55,870
+Now I'm going to give you this as a
+bit of fun, really, because order by
+
+88
+00:06:55,870 --> 00:07:00,320
+is quite a difficult one to exploit
+because after you get to the order
+
+89
+00:07:00,370 --> 00:07:07,540
+by part, you can't append additional
+records via union, but you can do
+
+90
+00:07:07,540 --> 00:07:11,920
+this. You can alter the way the
+sorting happens.
+
+91
+00:07:12,220 --> 00:07:17,200
+So in this case, we are trying to
+select the number one from the admin
+
+92
+00:07:17,200 --> 00:07:22,000
+table when this condition passes it,
+simply looking at the admin table at
+
+93
+00:07:22,000 --> 00:07:26,250
+record six and saying, Does the
+password begin with the letter A? If
+
+94
+00:07:26,250 --> 00:07:32,550
+it retaining returned one, then the
+order by becomes ID equals one, and
+
+95
+00:07:32,550 --> 00:07:37,680
+therefore the record which has an ID
+of one in this case, Amy moves all
+
+96
+00:07:37,680 --> 00:07:41,940
+the way to the bottom of the table.
+If it doesn't match, Amy stays at the
+
+97
+00:07:41,940 --> 00:07:46,620
+top of the table, so Spamton can
+issue lots and lots of queries. So
+
+98
+00:07:46,620 --> 00:07:50,700
+this time now checking for password
+beginning with B. Imagine that Amy
+
+99
+00:07:50,700 --> 00:07:54,660
+moves to the bottom and goes, Ah,
+bingo, I've got the first character
+
+100
+00:07:54,660 --> 00:07:57,930
+of the password field and then move
+on to the second character.
+
+101
+00:07:58,680 --> 00:08:03,060
+Obviously, we shouldn't be storing
+our passwords in plain text. And if
+
+102
+00:08:03,060 --> 00:08:05,820
+you are interested in passwords,
+there's a brilliant conference run,
+
+103
+00:08:05,820 --> 00:08:10,300
+typically every year on passwords.
+Password Com.
+
+104
+00:08:10,300 --> 00:08:13,500
+That's two to three days worth of
+talks on this stuff. It's really
+
+105
+00:08:13,500 --> 00:08:18,090
+fascinating, but I think we should
+move on. Ok.
+
+106
+00:08:18,180 --> 00:08:20,870
+HTML.
+
+107
+00:08:20,870 --> 00:08:24,450
+This is the classic example. You
+simply are introducing user data into
+
+108
+00:08:24,450 --> 00:08:25,700
+the HTML.
+
+109
+00:08:25,700 --> 00:08:30,690
+Spamton comes along and it simply
+adds a script hack. In this case, the
+
+110
+00:08:30,690 --> 00:08:31,860
+evil alert.
+
+111
+00:08:33,890 --> 00:08:37,220
+Ideally, we'd have additional
+mitigations in place, like a content
+
+112
+00:08:37,220 --> 00:08:44,400
+security policy to block it. But
+there can be ways around that. So
+
+113
+00:08:44,400 --> 00:08:47,420
+what we should be doing instead is
+using a library to build our HTML.
+
+114
+00:08:47,920 --> 00:08:52,590
+The library has understanding of the
+HTML. It knows how to escape values
+
+115
+00:08:52,590 --> 00:08:57,960
+and understands the different context
+those values can appear in. So the
+
+116
+00:08:58,170 --> 00:09:04,320
+HTML will typically come from a
+static file or, in this case, a
+
+117
+00:09:04,320 --> 00:09:09,900
+string. This is more common if you're
+using small snippets of HTML. You
+
+118
+00:09:09,900 --> 00:09:15,810
+provide that template, that string,
+to the rendering, the template engine
+
+119
+00:09:16,170 --> 00:09:22,230
+and then you provide the user details
+separately. It can then go away.
+
+120
+00:09:23,160 --> 00:09:28,200
+And encode those values, according to
+the context. And that's great, and
+
+121
+00:09:28,200 --> 00:09:32,160
+that works nice and simple. And you
+do have to make sure you templating
+
+122
+00:09:32,160 --> 00:09:36,960
+engine is context aware. Otherwise,
+there are risks associated with that.
+
+123
+00:09:39,360 --> 00:09:43,650
+Moving on from HTML, we also have
+command line injection. Again,
+
+124
+00:09:43,650 --> 00:09:47,010
+another simple one user data is
+included directly in the command.
+
+125
+00:09:48,030 --> 00:09:55,050
+This fails if, because it hasn't been
+escaped, so Spamton can then write
+
+126
+00:09:55,050 --> 00:10:01,350
+this where it's grep of a blank
+string and then providing a path to
+
+127
+00:10:01,350 --> 00:10:05,850
+the secrets file and then the rest is
+commented out. So that doesn't
+
+128
+00:10:05,850 --> 00:10:11,730
+actually get run. And it means that
+now Spamton is effectively returning
+
+129
+00:10:12,480 --> 00:10:18,300
+all the lines from the secrets file.
+So how do we stop mistakes?
+
+130
+00:10:19,170 --> 00:10:23,160
+So there's a thing called taint
+checking that could help here. This
+
+131
+00:10:23,160 --> 00:10:28,950
+is where variables note if they are
+tainted or untainted. The most
+
+132
+00:10:28,950 --> 00:10:33,270
+simplest version of this is you have
+a string which is seen as untainted,
+
+133
+00:10:34,110 --> 00:10:38,400
+it gets assigned to a variable and
+that in this case, the HTML variable
+
+134
+00:10:38,400 --> 00:10:44,070
+is now marked as untainted. If you
+have a slightly longer version, it's
+
+135
+00:10:44,070 --> 00:10:47,610
+the different parts that make it up.
+So you're starting off with an
+
+136
+00:10:47,610 --> 00:10:52,350
+untainted string. Your tainted
+variable, in this case name, and
+
+137
+00:10:52,350 --> 00:10:56,120
+we're going to assume that came from
+a database or a query string post
+
+138
+00:10:56,130 --> 00:11:02,300
+data or a cookie. And then you've got
+your untainted finishing closing P
+
+139
+00:11:02,300 --> 00:11:03,520
+tag.
+
+140
+00:11:03,520 --> 00:11:08,460
+Because this HTML variable now
+contains tainted data. It is also
+
+141
+00:11:08,460 --> 00:11:14,310
+seen as tainted, and it means that
+our defending system, in this case,
+
+142
+00:11:14,310 --> 00:11:20,940
+the HTML templating engine can now
+reject it. This is a similar example,
+
+143
+00:11:20,940 --> 00:11:26,220
+but we're now going to use an
+escaping function. So you've got the
+
+144
+00:11:26,220 --> 00:11:30,600
+tainted and untainted things. We're
+going to escape it to make it safe
+
+145
+00:11:31,350 --> 00:11:35,850
+and therefore it kind of is safe. You
+know, it has been encoded correctly
+
+146
+00:11:35,850 --> 00:11:40,410
+for that context. Brilliant. And
+therefore, HTML was seen as
+
+147
+00:11:40,410 --> 00:11:45,390
+untainted. But unfortunately, taint
+checking incorrectly assumed escaping
+
+148
+00:11:45,390 --> 00:11:50,180
+makes a value safe for any context.
+And that's a problem.
+
+149
+00:11:50,180 --> 00:11:55,980
+It creates a false sense of security.
+So in this example, we have our same
+
+150
+00:11:55,980 --> 00:12:00,870
+setup as before. We're going to be
+escaping, is this safe?
+
+151
+00:12:01,290 --> 00:12:02,490
+Well, no.
+
+152
+00:12:04,220 --> 00:12:10,790
+That didn't need to be any encoding,
+but because the a href now includes
+
+153
+00:12:10,790 --> 00:12:13,760
+Spamton's evil alert javascript.
+
+154
+00:12:14,740 --> 00:12:18,070
+It means that Spamton now has a
+cross-site scripting vulnerability.
+
+155
+00:12:20,660 --> 00:12:27,480
+Ok. How about this one? It's an image
+tag. It's got a source. Sources can't
+
+156
+00:12:27,480 --> 00:12:34,830
+include JavaScript, so kind of safe,
+so use your set up again. Is it safe?
+
+157
+00:12:35,700 --> 00:12:39,180
+Well, we're missing some quote marks
+around the attribute and therefore it
+
+158
+00:12:39,180 --> 00:12:43,740
+is not safe. There was nothing in
+that string that Spamton provided
+
+159
+00:12:43,740 --> 00:12:48,300
+which needed to be altered to be
+encoded. So by providing a forward
+
+160
+00:12:48,300 --> 00:12:52,980
+slash, the browser returns the home
+page for the image, which of course
+
+161
+00:12:52,980 --> 00:12:58,860
+goes wrong. And then the on error
+attribute fires and then the alert is
+
+162
+00:12:58,860 --> 00:13:04,660
+then executed. Ok, so this is a trick
+question.
+
+163
+00:13:05,170 --> 00:13:12,580
+We are now going to put quotes around
+it. So same again, is it safe? No.
+
+164
+00:13:13,490 --> 00:13:18,110
+Now, I say it's a trick question,
+because specifically in PHP before
+
+165
+00:13:18,380 --> 00:13:23,210
+8.1, which hasn't been released yet,
+single quotes are not encoded by
+
+166
+00:13:23,210 --> 00:13:28,790
+default. Now I fortunately got that
+changed beginning of this year. So if
+
+167
+00:13:28,790 --> 00:13:32,390
+anything breaks, please let me know.
+But if anything breaks, you've
+
+168
+00:13:32,390 --> 00:13:35,670
+probably got a problem. But anyway.
+Ok.
+
+169
+00:13:35,690 --> 00:13:42,050
+And another quick example with the
+SQL, with my SQL in particular, with
+
+170
+00:13:42,050 --> 00:13:45,290
+the real escape string, because
+obviously, you know, it's got to be
+
+171
+00:13:45,290 --> 00:13:48,560
+real. There's the tainted, untainted.
+
+172
+00:13:49,250 --> 00:13:54,140
+Now it's been escaped. Well, is that
+safe? No. Again, we're missing quote
+
+173
+00:13:54,140 --> 00:13:59,390
+marks. The escape string is for
+escaping the string quoting
+
+174
+00:13:59,390 --> 00:14:03,110
+character. Typically, the single
+quotes or the double quotes. Spamton
+
+175
+00:14:03,110 --> 00:14:06,410
+hasn't used any of those characters,
+Spamton has just simply said minus
+
+176
+00:14:06,410 --> 00:14:12,020
+one and then the union part is
+before. So this is also vulnerable to
+
+177
+00:14:12,020 --> 00:14:18,260
+injection vulnerabilities. Taint
+checking is close, but escaping
+
+178
+00:14:18,260 --> 00:14:24,080
+should be done by a third party
+library, and we can simplify it by
+
+179
+00:14:24,080 --> 00:14:28,430
+looking for strings from a trusted
+developer. We can basically shorten
+
+180
+00:14:28,430 --> 00:14:35,520
+it to safe versus unsafe. Safe,
+specifically, when talking about
+
+181
+00:14:35,520 --> 00:14:38,730
+injection vulnerabilities, a string
+defined by the programmer in the
+
+182
+00:14:38,730 --> 00:14:43,760
+source code and unsafe being
+everything else. So we go back to our
+
+183
+00:14:43,760 --> 00:14:47,810
+examples from earlier in the prepared
+query. So let's start from users
+
+184
+00:14:47,810 --> 00:14:53,540
+where ID equals question mark, is a
+developer defined string that is said
+
+185
+00:14:53,550 --> 00:14:58,340
+it's safe. The ID is provided
+separately and we don't care about
+
+186
+00:14:58,340 --> 00:15:01,790
+that. That's user data that's
+supposed to be kept separate. That's
+
+187
+00:15:01,790 --> 00:15:08,810
+good. If we did append the user data
+to the SQL, that's safe, unsafe and
+
+188
+00:15:08,810 --> 00:15:14,090
+therefore the SQL string itself is
+now considered unsafe. And then the
+
+189
+00:15:14,090 --> 00:15:19,490
+database abstraction can reject this.
+You can say no, not having that same
+
+190
+00:15:19,490 --> 00:15:24,360
+with HTML templating, safe, unsafe
+values being provided.
+
+191
+00:15:24,380 --> 00:15:29,540
+That's good. As soon as you include
+user data into it, you know we are
+
+192
+00:15:29,540 --> 00:15:33,650
+going to reject it. Same as before.
+And likewise, with the command line
+
+193
+00:15:33,650 --> 00:15:38,060
+stuff. Here's just string from the
+developer, the values which come in
+
+194
+00:15:38,060 --> 00:15:43,910
+from the user. That's good. If it's
+done incorrectly, then the command
+
+195
+00:15:43,910 --> 00:15:50,090
+can't reject it. The same approach
+can be used from the database
+
+196
+00:15:50,090 --> 00:15:54,650
+abstraction when the values are kept
+separate. This is great. You've got
+
+197
+00:15:54,650 --> 00:15:58,550
+the published date is greater than
+the thing. These are kept separate.
+
+198
+00:15:59,300 --> 00:16:02,600
+I'm just pulling this one out again
+because I do need to stress the
+
+199
+00:16:02,600 --> 00:16:07,040
+definition of what safe is in this
+context. Remember, it's safe when
+
+200
+00:16:07,040 --> 00:16:10,490
+talking about injection
+vulnerabilities. Spamton could give
+
+201
+00:16:10,490 --> 00:16:15,800
+you a dodgy value or a value you
+weren't expecting. Now, in a select
+
+202
+00:16:15,800 --> 00:16:18,830
+statement that's probably not
+necessarily the worst thing this
+
+203
+00:16:18,830 --> 00:16:23,270
+could be a bit more important was a
+delete were to do everything based on
+
+204
+00:16:23,270 --> 00:16:29,520
+this. So we're published is greater
+than year zero. Perhaps a bit more
+
+205
+00:16:29,520 --> 00:16:34,740
+obvious when you're talking about rm
+commands, because, you know, again,
+
+206
+00:16:34,740 --> 00:16:38,600
+this is technically safe from an
+injection point of view. You know,
+
+207
+00:16:38,610 --> 00:16:44,250
+we're not really, or we can't cover
+things which the developer is
+
+208
+00:16:44,250 --> 00:16:48,460
+allowing to happen. So this is only
+safe again for injection
+
+209
+00:16:48,460 --> 00:16:51,480
+vulnerabilities. Spamton could set
+the path to just simply saying
+
+210
+00:16:51,480 --> 00:16:56,550
+forward slash and then you get your
+classic rm-rf joke. Obviously, a lot
+
+211
+00:16:56,550 --> 00:17:00,330
+of our commands now prevent this, or
+at least ask you to provide an
+
+212
+00:17:00,330 --> 00:17:03,340
+initial argument, but there we go.
+
+213
+00:17:03,340 --> 00:17:06,720
+OK, so handling special cases.
+
+214
+00:17:08,750 --> 00:17:13,860
+This is quite a common one, which is
+where you have the in clause and you
+
+215
+00:17:13,860 --> 00:17:21,320
+will provide it with an array of
+numbers or integers, doing it this
+
+216
+00:17:21,320 --> 00:17:23,450
+way is very convenient.
+
+217
+00:17:23,600 --> 00:17:27,290
+It's quite simple. You notice I'm
+just using one function, the implode.
+
+218
+00:17:28,580 --> 00:17:35,330
+But it's not ideal because did you
+remember to ensure that they are all
+
+219
+00:17:35,330 --> 00:17:36,880
+integers?
+
+220
+00:17:36,880 --> 00:17:40,970
+When you start talking about large
+projects mistakes are very easy to
+
+221
+00:17:40,970 --> 00:17:47,360
+make, and if you look for example at
+the WordPress code base they use
+
+222
+00:17:47,360 --> 00:17:50,720
+where in quite a bit and there are a
+few cases where they're not actually
+
+223
+00:17:50,720 --> 00:17:54,770
+casting it to an integer. They have
+additional protections in place, so
+
+224
+00:17:54,770 --> 00:17:58,430
+it's not actually a vulnerability,
+but we're getting into that territory
+
+225
+00:17:58,430 --> 00:18:00,800
+of mistakes could be made.
+
+226
+00:18:01,700 --> 00:18:06,830
+So, you know, in this case, we're not
+converting to an integer and then we
+
+227
+00:18:06,830 --> 00:18:11,780
+have our where ID minus one so that
+we don't get anything from the first
+
+228
+00:18:11,780 --> 00:18:19,180
+table and you've got your union from
+the admin table again at the end. How
+
+229
+00:18:19,180 --> 00:18:24,490
+can we deal with this? Well, we use
+parameters again, as we should be.
+
+230
+00:18:25,340 --> 00:18:29,720
+This time, we're just going to simply
+provide the right number of question
+
+231
+00:18:29,720 --> 00:18:33,740
+mark parameters in there by just
+simply counting up the number of IDs
+
+232
+00:18:33,740 --> 00:18:41,280
+that we want. That function, in
+parameters count, can just be as
+
+233
+00:18:41,280 --> 00:18:44,940
+simple as building up and starting
+off with one question mark and then
+
+234
+00:18:44,940 --> 00:18:49,260
+appending more as you need them. This
+is perhaps the easiest to read and
+
+235
+00:18:49,260 --> 00:18:53,430
+understand in the context of a
+program or a defined string. We could
+
+236
+00:18:53,430 --> 00:18:57,450
+get a little bit more fancy. And you
+can build up an array of question
+
+237
+00:18:57,450 --> 00:19:02,730
+marks and then you can join or
+implode those values together and
+
+238
+00:19:02,730 --> 00:19:05,050
+return that.
+
+239
+00:19:05,050 --> 00:19:08,940
+Same as always, you've got to be
+careful with no IDs because databases
+
+240
+00:19:08,940 --> 00:19:13,080
+don't really like it when you say
+where ID is in open bracket, closed
+
+241
+00:19:13,080 --> 00:19:16,350
+bracket. But you shouldn't be running
+the query anyway, because it's not
+
+242
+00:19:16,350 --> 00:19:23,790
+going to return anything. The second
+problem you might face is field names
+
+243
+00:19:23,790 --> 00:19:28,170
+or table names. These can't be
+parameterized because they need to go
+
+244
+00:19:28,170 --> 00:19:32,160
+into the original SQL because the
+database needs to create its query
+
+245
+00:19:32,160 --> 00:19:38,430
+execution plan. You can't just simply
+append the value from the user, and
+
+246
+00:19:38,430 --> 00:19:43,770
+it's dangerous, but you could escape
+the field or ensure it matches a
+
+247
+00:19:43,770 --> 00:19:49,560
+certain pattern. This is still risky,
+but because you shouldn't really
+
+248
+00:19:49,560 --> 00:19:54,570
+allow them to just choose any field,
+you know, you could imagine a listing
+
+249
+00:19:54,570 --> 00:19:58,530
+of users to a website where it's just
+simply showing their name and their
+
+250
+00:19:58,530 --> 00:20:05,730
+profile. But if the attacker was able
+to search-- sort by their email
+
+251
+00:20:05,730 --> 00:20:10,470
+address, the attacker can keep
+changing their email address and then
+
+252
+00:20:10,470 --> 00:20:14,790
+sorting by the email address and
+seeing where they appear on the
+
+253
+00:20:14,790 --> 00:20:20,310
+list. And from that, you can infer
+the values from other fields in the
+
+254
+00:20:20,310 --> 00:20:24,600
+database, which they probably
+shouldn't be able to access. How do
+
+255
+00:20:24,600 --> 00:20:29,760
+we deal with this? Well, we have to
+have an allow list, as in only these
+
+256
+00:20:29,760 --> 00:20:34,350
+fields are allowed to be sorted by.
+This is good practice anyway,
+
+257
+00:20:34,380 --> 00:20:39,360
+irrespective of this talk. So you
+have your allowed list. You use the
+
+258
+00:20:39,360 --> 00:20:44,870
+array search function to get back the
+ID of that element.
+
+259
+00:20:44,880 --> 00:20:51,480
+So what, you know, the order field is
+defined by the user and we use what
+
+260
+00:20:51,480 --> 00:20:55,890
+the user said they want and we look
+through that array if it matches. We
+
+261
+00:20:55,890 --> 00:20:59,790
+get back an ID. If it doesn't match,
+we get a false-ish thing, which is
+
+262
+00:20:59,790 --> 00:21:05,240
+kind of zero and then we can use that
+array to then pull back the
+
+263
+00:21:05,240 --> 00:21:09,970
+programmer defined string, so we are
+simply appending on the programmer
+
+264
+00:21:09,970 --> 00:21:13,580
+defined string, and that means that
+we are still working with the same
+
+265
+00:21:13,580 --> 00:21:19,520
+principle and we are also limiting to
+what fields we allowed to sort by.
+
+266
+00:21:20,120 --> 00:21:24,440
+All good. What about config values?
+So things like tables, names which
+
+267
+00:21:24,440 --> 00:21:27,590
+are set in INI, JSON, YAML files?
+
+268
+00:21:28,760 --> 00:21:32,450
+Well, we'll have to cover that in the
+next section because it's going to be
+
+269
+00:21:32,450 --> 00:21:36,680
+down to the library to deal with it.
+And the library is anyone that knows
+
+270
+00:21:36,680 --> 00:21:40,340
+how to deal with these safely, as in
+they kind of need to be doing this
+
+271
+00:21:40,340 --> 00:21:45,320
+anyway. Ok, ending injection
+vulnerabilities in Go.
+
+272
+00:21:45,320 --> 00:21:48,890
+I'd like to thank Dima for checking
+over the code and Roberto for writing
+
+273
+00:21:48,890 --> 00:21:54,050
+up the way in which Go HTML works.
+This is an example library that can
+
+274
+00:21:54,050 --> 00:22:01,370
+be written in Go today. First of all,
+the library would create a type and
+
+275
+00:22:01,370 --> 00:22:04,800
+we're just going to call it string
+constant. You notice it's got a
+
+276
+00:22:04,820 --> 00:22:05,930
+lowercase S.
+
+277
+00:22:05,930 --> 00:22:11,600
+So therefore it is not exported. It
+also then provides a method to call
+
+278
+00:22:11,600 --> 00:22:16,430
+this library. And you'll notice that
+it has a capital O, which means it is
+
+279
+00:22:16,430 --> 00:22:18,200
+exported.
+
+280
+00:22:18,200 --> 00:22:22,370
+Its first argument has it actually
+uses its string constant and that is
+
+281
+00:22:22,370 --> 00:22:24,380
+required for its input.
+
+282
+00:22:24,380 --> 00:22:28,520
+So I put that to the side and then
+the actual code from the developer.
+
+283
+00:22:28,820 --> 00:22:32,030
+This bit, we can kind of ignore it
+basically just returning the name
+
+284
+00:22:32,030 --> 00:22:35,240
+from the user saying, you know,
+what's their name? That's our
+
+285
+00:22:35,240 --> 00:22:41,150
+untrusted data. When you actually use
+our method from the library, the only
+
+286
+00:22:41,150 --> 00:22:46,280
+accept string constant method, in
+this case, we are providing it with
+
+287
+00:22:46,280 --> 00:22:51,010
+an untyped string. It is the
+developer defined constant.
+
+288
+00:22:51,010 --> 00:22:55,940
+Go uses type conversion during
+compilation to turn that into the
+
+289
+00:22:55,940 --> 00:23:00,890
+string constant. So even though it's
+not exported by the package, it can
+
+290
+00:23:00,890 --> 00:23:06,890
+actually still be used. Next, we have
+our example where the developers made
+
+291
+00:23:06,890 --> 00:23:10,520
+a mistake. They are using the
+variable from the user. That cannot
+
+292
+00:23:10,520 --> 00:23:13,640
+be converted to a string constant
+because it's a standard variable at
+
+293
+00:23:13,640 --> 00:23:17,930
+compile time still unknown, and
+therefore it is rejected by the
+
+294
+00:23:17,930 --> 00:23:23,660
+compiler. Brilliant. That's it.
+That's it sorted. So how did this
+
+295
+00:23:23,660 --> 00:23:27,740
+actually get used by real package in
+this case? Go safe HTML or to give it
+
+296
+00:23:27,740 --> 00:23:32,420
+the full URL. We're going to, first
+of all, look at the JavaScript part
+
+297
+00:23:32,420 --> 00:23:36,410
+of this. It's the simplest one to use
+the script from constant method that
+
+298
+00:23:36,410 --> 00:23:41,780
+it provides expects the JavaScript to
+be written by the developer. Now, I
+
+299
+00:23:41,780 --> 00:23:45,620
+personally think you shouldn't be
+using in-line JavaScript, but it's
+
+300
+00:23:45,620 --> 00:23:49,850
+still there and this is a safe way to
+doing it because the developer wrote
+
+301
+00:23:49,850 --> 00:23:54,440
+it. It's-- they're the one who's
+trusted. If a unsafe value was
+
+302
+00:23:54,440 --> 00:23:58,730
+provided, something from the user and
+the compiler would reject it in the
+
+303
+00:23:58,730 --> 00:24:01,290
+same way as shown previously.
+
+304
+00:24:01,290 --> 00:24:05,420
+When it comes to the HTML side of
+things, with the we are kind of
+
+305
+00:24:05,420 --> 00:24:09,770
+having to use the query builder
+pattern, but we're taking the HTML
+
+306
+00:24:09,770 --> 00:24:15,200
+first and it's going to be from the
+template package must pass an execute
+
+307
+00:24:15,200 --> 00:24:18,560
+to HTML and that does the check.
+
+308
+00:24:19,400 --> 00:24:24,080
+The safe HTML, HTML escaped method
+actually takes the value and encodes
+
+309
+00:24:24,080 --> 00:24:26,630
+it and returns a HTML object.
+
+310
+00:24:27,170 --> 00:24:30,110
+And then likewise, we see we're just
+doing another thing which returns
+
+311
+00:24:30,110 --> 00:24:35,140
+HTML drop from developer to find
+string. And then the HTML concat
+
+312
+00:24:35,140 --> 00:24:39,890
+function adds those three things
+together and gives you the output,
+
+313
+00:24:39,890 --> 00:24:46,520
+which is all correctly encoded. This
+approach is not content sensitive.
+
+314
+00:24:48,410 --> 00:24:53,510
+The templating system is, but this
+kind of works. If the developer was
+
+315
+00:24:53,510 --> 00:24:58,160
+to make a mistake and to start using
+those methods they shouldn't do by
+
+316
+00:24:58,160 --> 00:25:03,200
+passing in the user value like this,
+compiler will reject it. And
+
+317
+00:25:03,200 --> 00:25:09,020
+likewise, during the concatenation
+bit, if that non HTML value was
+
+318
+00:25:09,020 --> 00:25:17,210
+provided in, that would also be
+rejected. Ok, so how we do this in
+
+319
+00:25:17,210 --> 00:25:20,750
+Node and one day JavaScript.
+
+320
+00:25:20,750 --> 00:25:25,730
+JavaScript introduced a thing called
+a template literal.
+
+321
+00:25:25,760 --> 00:25:28,610
+This did kind of cause a bit of a
+problem from the security point of
+
+322
+00:25:28,610 --> 00:25:32,840
+view because it made it easier to do
+the wrong thing as in including a
+
+323
+00:25:32,840 --> 00:25:35,200
+value not being escaped.
+
+324
+00:25:35,200 --> 00:25:38,450
+For example, that gets included
+straight away. And if that puts onto
+
+325
+00:25:38,450 --> 00:25:44,110
+the page, you have a problem. But
+there is a new version, I say new,
+
+326
+00:25:44,120 --> 00:25:49,340
+still a few years old, called tagged
+templates. What this does is it takes
+
+327
+00:25:49,340 --> 00:25:55,400
+a function and it calls it and
+provides-- the JavaScript engine
+
+328
+00:25:55,400 --> 00:25:59,330
+provides the template in an
+array-like structure. Basically, it
+
+329
+00:25:59,330 --> 00:26:03,200
+takes that template and splits it up
+into the different component parts.
+
+330
+00:26:03,380 --> 00:26:07,950
+And then the values are provided
+separately as additional arguments.
+
+331
+00:26:08,520 --> 00:26:13,080
+And here you see from the console log
+output how it has broken it up and
+
+332
+00:26:13,470 --> 00:26:16,590
+basically what you end up having is
+the first part is your developer
+
+333
+00:26:16,590 --> 00:26:22,350
+defined strings. And the second part
+is the values. That's it being used
+
+334
+00:26:22,350 --> 00:26:27,420
+correctly. Unfortunately, we've seen
+the case where a developer has gone,
+
+335
+00:26:27,540 --> 00:26:30,990
+That's a function. They call
+functions with brackets. So they've
+
+336
+00:26:30,990 --> 00:26:34,200
+put the brackets around and then it
+complains that the first argument
+
+337
+00:26:34,200 --> 00:26:39,510
+should be an array, so they just put
+an array structure around it. And
+
+338
+00:26:39,510 --> 00:26:45,410
+this kind of broke the entire thing.
+And what ends up happening is the
+
+339
+00:26:45,410 --> 00:26:50,480
+template engine would just receive
+the first string and no additional
+
+340
+00:26:50,480 --> 00:26:53,090
+arguments, so we just went, Yeah,
+that's it. Pass it straight through.
+
+341
+00:26:53,120 --> 00:26:57,470
+All sorted a little bit later was
+also another example where that first
+
+342
+00:26:57,470 --> 00:27:01,400
+thing was actually provided as an
+array. Likewise, but again, you'll
+
+343
+00:27:01,400 --> 00:27:09,770
+notice that the user value is in that
+first array, not the second. So to
+
+344
+00:27:09,770 --> 00:27:13,790
+the rescue is a new feature called is
+Template Object. Not currently
+
+345
+00:27:13,790 --> 00:27:18,500
+available in JavaScript, but Node
+does have a poly fill. How does it
+
+346
+00:27:18,500 --> 00:27:22,490
+work? Well, it's just a very simple
+function that you pass in the first
+
+347
+00:27:22,490 --> 00:27:27,200
+argument and you're simply saying, Is
+this a template object, which is an
+
+348
+00:27:27,200 --> 00:27:31,550
+array-like structure? Ideally, you'd
+also check to make sure is that sure
+
+349
+00:27:31,550 --> 00:27:35,780
+it is an actual array as well. But
+the idea is, if this is not true,
+
+350
+00:27:35,810 --> 00:27:41,210
+then we throw an exception. So when
+we use the tagged template correctly,
+
+351
+00:27:41,450 --> 00:27:45,050
+that's all good and everything's
+fine. But if you don't use it
+
+352
+00:27:45,050 --> 00:27:49,670
+correctly now, you can throw an
+exception. Nice and simple. How this
+
+353
+00:27:49,670 --> 00:27:53,060
+works in Node, well, first of all,
+you have to install that poly fill.
+
+354
+00:27:53,630 --> 00:27:59,860
+Npm install is template-- template
+object will just install it.
+
+355
+00:27:59,860 --> 00:28:05,060
+To use it, well, you just simply
+require the poly first and then you
+
+356
+00:28:05,060 --> 00:28:08,660
+just call the function. Now I'm going
+to use console dot log just to show
+
+357
+00:28:08,660 --> 00:28:13,160
+us through like a debug mode and
+you'll notice on lines 12, 14 and 16,
+
+358
+00:28:13,820 --> 00:28:17,780
+that's the same three examples that I
+showed you earlier. And when this
+
+359
+00:28:17,780 --> 00:28:22,940
+actually runs, we have basically the
+first one is true because that was
+
+360
+00:28:22,940 --> 00:28:28,280
+used correctly, and those two other
+calls which were done incorrectly get
+
+361
+00:28:28,280 --> 00:28:33,140
+marked as false because they are no
+longer template objects. This
+
+362
+00:28:33,140 --> 00:28:36,650
+function is hopefully going to come
+to JavaScript soon. This is the
+
+363
+00:28:36,650 --> 00:28:40,760
+proposal that's going through the TK
+Thirty Nine process, and I'd like to
+
+364
+00:28:40,760 --> 00:28:45,170
+thank Christoph for working on this
+at the moment. And Mike Samuel, who
+
+365
+00:28:45,170 --> 00:28:50,360
+we saw earlier, who started this
+project off. There is a different
+
+366
+00:28:50,360 --> 00:28:55,910
+approach in Node, which is the Google
+Closure Library. You just install it
+
+367
+00:28:55,910 --> 00:28:59,060
+with npm and you require it.
+
+368
+00:28:59,690 --> 00:29:02,480
+We're going to do our usual asking
+the person for a name just so we've
+
+369
+00:29:02,480 --> 00:29:07,560
+got some untrustable data and then
+we're using this Google dot string
+
+370
+00:29:07,560 --> 00:29:09,890
+dot const from method.
+
+371
+00:29:10,880 --> 00:29:14,620
+The idea is it's supposed to be
+especially a developer defined
+
+372
+00:29:14,620 --> 00:29:20,240
+constant. The second one, when you're
+using Node doesn't actually do
+
+373
+00:29:20,240 --> 00:29:25,310
+anything, it just passes it through.
+It doesn't check it. But if you were
+
+374
+00:29:25,310 --> 00:29:31,910
+to download the closure compiler and
+then use the closure compiler to make
+
+375
+00:29:31,910 --> 00:29:36,080
+yourself a JavaScript bundle of all
+your JavaScript, then it will
+
+376
+00:29:36,080 --> 00:29:39,260
+actually complain. It will actually
+pick up on this and go, No, that's
+
+377
+00:29:39,260 --> 00:29:45,730
+not good enough, and it will stop the
+code from executing. Now, going back,
+
+378
+00:29:45,730 --> 00:29:48,640
+we're going to go off on a bit of a
+tangent now. I'm going to talk about
+
+379
+00:29:48,640 --> 00:29:53,590
+Trusted Types. Trusted Types is
+available today in JavaScript, and it
+
+380
+00:29:53,590 --> 00:29:58,960
+protects against DOM based cross-site
+scripting vulnerabilities. And we're
+
+381
+00:29:58,960 --> 00:30:03,010
+going to have hopefully an extension
+to this soon. As described at this
+
+382
+00:30:03,010 --> 00:30:04,170
+URL.
+
+383
+00:30:04,170 --> 00:30:09,040
+So Trusted Types as it works today,
+you add it to your content security
+
+384
+00:30:09,040 --> 00:30:13,510
+policy and you're simply telling the
+browser, We want to use Trusted Types
+
+385
+00:30:14,110 --> 00:30:16,480
+and we're going to use them for
+script because, you know, in the
+
+386
+00:30:16,480 --> 00:30:21,460
+future, we might have other things
+like styling. When you do your normal
+
+387
+00:30:21,460 --> 00:30:25,420
+JavaScript, as in, you're getting a
+reference to the DOM node and using
+
+388
+00:30:25,420 --> 00:30:28,990
+safe methods like text content.
+That's absolutely fine. That's
+
+389
+00:30:28,990 --> 00:30:34,300
+allowed if you use inner HTML, that's
+disabled by default.
+
+390
+00:30:34,570 --> 00:30:41,830
+There are loads of syncs in the the
+DOM API, which are less than safe.
+
+391
+00:30:41,830 --> 00:30:45,860
+They're quite problematic. And it's
+not just in HTML, it's things like a
+
+392
+00:30:45,860 --> 00:30:51,280
+val, timeout, even a HREF attribute,
+because obviously you can put
+
+393
+00:30:51,280 --> 00:30:58,250
+JavaScript into that. There are loads
+of unsafe things, so the way Trusted
+
+394
+00:30:58,250 --> 00:31:03,580
+Types works is it basically disables
+them, but it allows you a way to
+
+395
+00:31:03,610 --> 00:31:08,710
+check your values before they are
+assigned. It's like a firewall for
+
+396
+00:31:08,710 --> 00:31:12,910
+protecting values. In this case, we
+just create ourselves a nice, simple
+
+397
+00:31:12,910 --> 00:31:16,660
+object, our Trusted Type object, and
+we have to provide a few different
+
+398
+00:31:16,660 --> 00:31:23,020
+methods, or at least one which is
+named appropriately for what's going
+
+399
+00:31:23,020 --> 00:31:27,070
+to be useful. In this case, I'm doing
+the dangerous thing of just simply
+
+400
+00:31:27,070 --> 00:31:29,950
+passing the values through, but
+ideally you would use something like
+
+401
+00:31:29,950 --> 00:31:33,640
+DOM Purify to make sure you know the
+value is safe. There's a new
+
+402
+00:31:33,640 --> 00:31:37,800
+sanitizer API that's been developed
+at the moment, or you might use reg
+
+403
+00:31:37,800 --> 00:31:41,050
+expressions or things just to make
+sure it's matching a pattern which
+
+404
+00:31:41,050 --> 00:31:46,230
+you know to be safe. The advantage of
+this approach is it means that ninety
+
+405
+00:31:46,330 --> 00:31:50,350
+nine percent of your code is going to
+be not using the unsafe APIs but the
+
+406
+00:31:50,350 --> 00:31:54,400
+times you do use it, use this method
+and it means that the auditor who is
+
+407
+00:31:54,400 --> 00:32:00,660
+looking over your code can check it
+and focus in on the problems.
+
+408
+00:32:00,660 --> 00:32:04,630
+To make sure your Trusted Type object
+is actually understood by the browser
+
+409
+00:32:04,630 --> 00:32:08,320
+to be trustworthy we call a method as
+in we're saying we're going to create
+
+410
+00:32:08,320 --> 00:32:13,780
+this policy, and here it is. The name
+of it has to match a value that's in
+
+411
+00:32:13,780 --> 00:32:17,050
+the header as well. So we're not
+making up anything that's not been
+
+412
+00:32:17,050 --> 00:32:18,160
+allowed.
+
+413
+00:32:18,160 --> 00:32:21,880
+And actually to use it is pretty much
+the same as before, but you now need
+
+414
+00:32:21,880 --> 00:32:27,970
+to call the method to basically pass
+it through that firewall-like method
+
+415
+00:32:27,970 --> 00:32:31,450
+that will check it and clean it and
+make sure it's all OK before it goes
+
+416
+00:32:31,450 --> 00:32:35,890
+into the HTML again, mostly for
+auditor purposes.
+
+417
+00:32:36,430 --> 00:32:39,880
+And this is it working correctly.
+
+418
+00:32:39,880 --> 00:32:43,960
+But bringing it back to the actual
+core idea of this talk. All of that
+
+419
+00:32:43,960 --> 00:32:47,920
+code was actually quite verbose. When
+you know that the string has been
+
+420
+00:32:47,920 --> 00:32:52,930
+written by the developer, it has no
+user input and therefore it's OK. So
+
+421
+00:32:52,960 --> 00:32:56,230
+one of the things that's being
+developed is the idea of having a
+
+422
+00:32:56,230 --> 00:33:01,510
+from literal method, which takes a
+template that can't have any
+
+423
+00:33:01,510 --> 00:33:05,380
+variables in it, and it just simply
+passes it through. It's a way of
+
+424
+00:33:05,410 --> 00:33:10,570
+simplifying it. And this is how
+JavaScript is likely to get the idea
+
+425
+00:33:10,570 --> 00:33:15,260
+of what is a developer defined string
+added to it.
+
+426
+00:33:15,260 --> 00:33:24,550
+And a nice, simple way in addition to
+the previous bit. So Java, there is a
+
+427
+00:33:24,550 --> 00:33:30,220
+labor code error prone again created
+by Google, and it runs extra checks
+
+428
+00:33:30,220 --> 00:33:36,220
+at compile time. Use your dependency
+management system, and you just
+
+429
+00:33:36,220 --> 00:33:37,340
+append it.
+
+430
+00:33:37,340 --> 00:33:40,180
+All the instructions on their
+website. It does have a few
+
+431
+00:33:40,180 --> 00:33:44,650
+dependencies, but the actual code,
+the actual JavaScript or Java code,
+
+432
+00:33:44,950 --> 00:33:49,810
+it's quite simple. First of all, you
+import the compile time constant
+
+433
+00:33:49,810 --> 00:33:54,310
+annotation and then you just use it
+and you just simply say, but this
+
+434
+00:33:54,310 --> 00:33:59,380
+argument should be a compile time
+constant. You get your name, the
+
+435
+00:33:59,380 --> 00:34:06,300
+untrusted data and then any time that
+sensitive function is called, the
+
+436
+00:34:06,300 --> 00:34:11,310
+compiler will check that it is a
+compile time constant.
+
+437
+00:34:11,310 --> 00:34:17,700
+If it's not, then the compiler will
+reject it. There is also a Google
+
+438
+00:34:17,700 --> 00:34:22,080
+GWT, but I think this might be a
+abandoned project because they
+
+439
+00:34:22,080 --> 00:34:26,040
+haven't even updated it to use https
+yet. But it has a method in there
+
+440
+00:34:26,040 --> 00:34:30,090
+called safe HTML from Safe Constant,
+which I believe works in the same
+
+441
+00:34:30,090 --> 00:34:35,910
+way. There is also a possibility
+doing it in C++ but I never quite
+
+442
+00:34:35,910 --> 00:34:39,300
+worked out how to do this. The
+Building Secure and Reliable Systems
+
+443
+00:34:39,300 --> 00:34:44,910
+Book has a single line quote of using
+a template constructor that depends
+
+444
+00:34:44,910 --> 00:34:49,920
+on each character value in the
+string, but no examples, and I'm not
+
+445
+00:34:49,920 --> 00:34:55,290
+entirely sure what that is. And
+likewise, Google have written up a
+
+446
+00:34:55,320 --> 00:34:59,190
+document called Safe HTML Types
+Overview, and they have a small quote
+
+447
+00:34:59,190 --> 00:35:03,720
+there where they talk about using
+from constant. But again, there's no
+
+448
+00:35:03,720 --> 00:35:08,820
+real examples of how that works, so
+I've not been able to get there. Ok,
+
+449
+00:35:08,820 --> 00:35:12,210
+so with PHP, we can use Static
+Analysis.
+
+450
+00:35:12,510 --> 00:35:15,840
+We're going to start with Psalm. This
+is the first one to implement this,
+
+451
+00:35:15,960 --> 00:35:20,340
+and I'd like to thank Matthew Brown
+for doing this. Psalm is easily
+
+452
+00:35:20,340 --> 00:35:25,150
+installed with composer, has a few
+dependencies.
+
+453
+00:35:25,150 --> 00:35:29,970
+To start your new project, you just
+initialize it. And in that process,
+
+454
+00:35:29,970 --> 00:35:34,600
+just make sure that the error
+checking level is set to three or
+
+455
+00:35:34,600 --> 00:35:37,660
+stricter. That's when it starts
+checking the types for this
+
+456
+00:35:37,660 --> 00:35:43,570
+particular time. So add just simply
+use, you specify that you will be
+
+457
+00:35:43,570 --> 00:35:49,480
+using a literal string type and for
+the arguments as to how it actually
+
+458
+00:35:49,480 --> 00:35:57,760
+works in code, basically, the Static
+Analysis tool will just pick up on
+
+459
+00:35:57,760 --> 00:36:01,120
+the fact that when you've actually
+added in a user value into the
+
+460
+00:36:01,120 --> 00:36:05,940
+literal string, it will reject it.
+PHP Stan is very similar, and I'd
+
+461
+00:36:06,040 --> 00:36:13,290
+like to thank Ondrej for this.
+Composer require to install-- it just
+
+462
+00:36:13,300 --> 00:36:17,680
+downloads. PHP sounds slightly
+different in that you have to be
+
+463
+00:36:17,680 --> 00:36:22,240
+level five or stricter when there's
+only a single type as in your're
+
+464
+00:36:22,240 --> 00:36:25,060
+only accepting literal strings. But
+it has to be seven or stricter when
+
+465
+00:36:25,060 --> 00:36:27,970
+there are multiple types. For
+example, if you're accepting a
+
+466
+00:36:27,970 --> 00:36:31,600
+literal string or an array and in
+this case, level nine is the most
+
+467
+00:36:31,600 --> 00:36:36,220
+strict, but it works in exactly the
+same way. You just say the parameter
+
+468
+00:36:36,220 --> 00:36:41,110
+type is literal string. And then when
+it actually picks up on the issue,
+
+469
+00:36:41,380 --> 00:36:47,000
+you know it rejects it from that. Ok,
+so the future.
+
+470
+00:36:47,000 --> 00:36:55,140
+Static analysis is used by about a
+third of developers, and that's good.
+
+471
+00:36:55,150 --> 00:37:00,150
+You know, it's good that it's
+happening, but it's not really
+
+472
+00:37:00,150 --> 00:37:05,040
+targeting the right people. Most
+developers who are probably creating
+
+473
+00:37:05,040 --> 00:37:09,270
+the most injection vulnerabilities
+are probably not using Static
+
+474
+00:37:09,270 --> 00:37:14,860
+Analysis. I'd like to thank Jet
+Brains for creating this survey,
+
+475
+00:37:14,860 --> 00:37:19,750
+which was released earlier this year,
+but there is also a slight bias in
+
+476
+00:37:19,750 --> 00:37:25,420
+this results. It's certain developers
+have filled out this form. Laravel is
+
+477
+00:37:25,420 --> 00:37:30,850
+a popular framework, but on the wider
+system it's unlikely to be very
+
+478
+00:37:30,850 --> 00:37:34,750
+representative because I'm fairly
+sure that WordPress does kind of take
+
+479
+00:37:34,750 --> 00:37:39,790
+the lead on the number of developers
+in the wider world, and especially as
+
+480
+00:37:39,790 --> 00:37:44,920
+WordPress is not easily managed with
+Static Analysis.
+
+481
+00:37:46,150 --> 00:37:51,150
+So this is why we can't with the PHP
+and the is literal RFC.
+
+482
+00:37:52,750 --> 00:37:57,160
+I'd like to thank Joe and Mate on
+this. Joe created the implementation.
+
+483
+00:37:58,120 --> 00:38:03,280
+It is available, you can add it as a
+patch PHP 8.1.
+
+484
+00:38:03,280 --> 00:38:07,060
+And Mate did performance testing on
+it to make sure that we weren't
+
+485
+00:38:07,060 --> 00:38:13,540
+making the process slower. This is
+the website where we put the RFC.
+
+486
+00:38:13,930 --> 00:38:18,940
+Unfortunately, it did fail as a
+through the vote, mostly because
+
+487
+00:38:18,940 --> 00:38:21,970
+there was some communication
+problems. I wasn't very good at
+
+488
+00:38:21,970 --> 00:38:25,990
+explaining myself and also we
+probably left it a little bit too
+
+489
+00:38:25,990 --> 00:38:31,180
+late to actually do the vote, as in
+the vote was finishing on the last
+
+490
+00:38:31,180 --> 00:38:35,000
+day before feature phrase. So perhaps
+quite understandably, people getting
+
+491
+00:38:35,000 --> 00:38:40,900
+a little bit unsure about it. Reason
+I want to go about it in this
+
+492
+00:38:40,900 --> 00:38:44,230
+particular way, it has no
+dependencies, so everyone will get it
+
+493
+00:38:44,230 --> 00:38:48,890
+and libraries can start using it
+straight away. It is easy to use.
+
+494
+00:38:49,270 --> 00:38:52,960
+It's a very simple function that
+allows you to just do this test.
+
+495
+00:38:53,710 --> 00:38:57,070
+There's no need to use Static
+Analysis, but it works very well with
+
+496
+00:38:57,070 --> 00:39:01,060
+it. You know, so the Static Analysis
+tool can actually use that function
+
+497
+00:39:01,090 --> 00:39:05,890
+and then sort of infer a particular
+type and then work back from it. And
+
+498
+00:39:05,890 --> 00:39:09,260
+that would be very useful.
+
+499
+00:39:09,260 --> 00:39:12,430
+And this is probably the most
+important is it works with existing
+
+500
+00:39:12,430 --> 00:39:16,600
+code and libraries. So a lot of
+libraries and a lot of code already
+
+501
+00:39:16,600 --> 00:39:20,770
+exists, and we don't want to have to
+have everyone rebuild everything with
+
+502
+00:39:20,770 --> 00:39:24,190
+query builders and things. You know,
+this is the the argument about, you
+
+503
+00:39:24,190 --> 00:39:28,030
+know, do you support concatenation or
+not? If you don't support
+
+504
+00:39:28,360 --> 00:39:33,430
+concatenation, it can help with
+debugging. But if it requires you to
+
+505
+00:39:33,430 --> 00:39:38,830
+rewrite huge sections of code
+because, you know, and it's not going
+
+506
+00:39:38,830 --> 00:39:42,910
+to actually improve your security by
+doing so, that's a lot of work, and
+
+507
+00:39:42,910 --> 00:39:47,560
+therefore it probably won't help with
+adoption. So we've gone with this
+
+508
+00:39:47,560 --> 00:39:52,120
+approach, which does support
+concatenation of literal values to
+
+509
+00:39:52,150 --> 00:39:59,410
+aid adoption, to make it easier. And
+by using a function, it allows you to
+
+510
+00:39:59,410 --> 00:40:05,020
+choose how to handle mistakes. So you
+can write to a file, you can write to
+
+511
+00:40:05,020 --> 00:40:09,280
+a database, call an API, throw an
+exception or just simply do nothing.
+
+512
+00:40:10,990 --> 00:40:15,970
+So libraries don't need everyone or--
+the advantage of this approach is it
+
+513
+00:40:15,970 --> 00:40:19,030
+means that libraries don't need
+everyone to understand and read all
+
+514
+00:40:19,030 --> 00:40:22,150
+of their documentation, which is kind
+of the big problem because libraries
+
+515
+00:40:22,150 --> 00:40:26,140
+get a bit complicated. There is a lot
+of methods they provide, and it's
+
+516
+00:40:26,140 --> 00:40:31,570
+unlikely that everyone knows exactly
+what is, you know, which arguments
+
+517
+00:40:31,570 --> 00:40:37,720
+are safe or not. And it also doesn't
+mean that we don't rely on developers
+
+518
+00:40:37,720 --> 00:40:41,680
+never making mistake because even the
+most experienced of developers might
+
+519
+00:40:41,680 --> 00:40:47,050
+make a mistake and not be able to
+notice it. And another thing is that
+
+520
+00:40:47,050 --> 00:40:50,110
+developers will be warned as soon as
+they write their code. So when people
+
+521
+00:40:50,110 --> 00:40:55,120
+talk about security being pushed left
+as in the closest to writing the code
+
+522
+00:40:55,120 --> 00:40:58,660
+as possible, it helps the process.
+
+523
+00:40:59,290 --> 00:41:03,910
+So, for example, an ID could
+highlight problems as the developer
+
+524
+00:41:03,910 --> 00:41:08,680
+types or if they're not using an ID,
+you know, this happens as soon as the
+
+525
+00:41:08,680 --> 00:41:12,640
+developer runs their code. So as they
+are writing the code, they can find
+
+526
+00:41:12,640 --> 00:41:17,350
+out about the problems. Generally
+speaking, we found a 0.7 percent
+
+527
+00:41:17,350 --> 00:41:21,970
+performance impact at a time when PHP
+was getting like a 30 percent
+
+528
+00:41:21,970 --> 00:41:27,160
+performance improvement. We did test
+this on Symfony demo without
+
+529
+00:41:27,370 --> 00:41:31,810
+connecting to the database. This
+meant that, you know, because if we
+
+530
+00:41:31,810 --> 00:41:35,440
+were connected to the database,
+there's too much variability. So we
+
+531
+00:41:35,440 --> 00:41:40,360
+were trying to find like the most
+pessimistic way of measuring
+
+532
+00:41:40,360 --> 00:41:41,900
+performance.
+
+533
+00:41:41,900 --> 00:41:44,920
+How it works? Well, first of all, we
+just checked to see if that function
+
+534
+00:41:44,920 --> 00:41:50,830
+exists with backwards compatibility
+reasons. And then if it is a if it's
+
+535
+00:41:50,830 --> 00:41:53,260
+not a literal, then we throw an
+exception. And as to how it actually
+
+536
+00:41:53,260 --> 00:41:56,680
+is used, we simply call the method.
+
+537
+00:41:57,430 --> 00:42:04,240
+And that means that every method that
+the library uses, it can just call
+
+538
+00:42:04,480 --> 00:42:09,430
+the is literal check, which the
+private method. Is this too strict?
+
+539
+00:42:09,760 --> 00:42:12,130
+Probably. So how about this?
+
+540
+00:42:12,160 --> 00:42:17,770
+Have a protection level. Zero for no
+checks, one for just warnings and
+
+541
+00:42:17,770 --> 00:42:21,400
+make that the default and then two
+for exceptions. So for those who
+
+542
+00:42:21,400 --> 00:42:25,720
+really want to make sure. So if
+you're dealing with medical records
+
+543
+00:42:25,720 --> 00:42:29,530
+and banking information, you probably
+want to go with exceptions, but most
+
+544
+00:42:29,530 --> 00:42:33,300
+people will probably be fine on
+warnings. You may even have it so the
+
+545
+00:42:33,310 --> 00:42:36,130
+exceptions are in development mode,
+but there are no checks on the
+
+546
+00:42:36,130 --> 00:42:38,260
+production server.
+
+547
+00:42:38,260 --> 00:42:41,650
+And the actual literal check that we
+showed earlier, expand it a little
+
+548
+00:42:41,650 --> 00:42:45,520
+bit so that you do your does the
+function exist or is it a literal?
+
+549
+00:42:45,880 --> 00:42:50,860
+That's good. Fantastic. We have a way
+of sort of saying, is this an
+
+550
+00:42:50,860 --> 00:42:53,710
+instance of an unsafe value, which
+we'll talk about in a minute. And
+
+551
+00:42:53,710 --> 00:42:56,320
+then you go through the different
+production levels, which would either
+
+552
+00:42:56,320 --> 00:43:02,320
+trigger a warning or an exception. So
+that special case of an unsafe value.
+
+553
+00:43:03,820 --> 00:43:09,790
+We have a simple stringable value
+object. It shouldn't be needed. This
+
+554
+00:43:09,790 --> 00:43:12,730
+is how you probably use it if you
+did, where you just simply say new
+
+555
+00:43:12,730 --> 00:43:17,290
+value-- new unsafe value and you put
+your string in there, which is
+
+556
+00:43:17,290 --> 00:43:22,300
+unsafe, and then you can then just
+call in the DB query. This is the
+
+557
+00:43:22,300 --> 00:43:25,930
+best example I can think of, but to
+be honest, you shouldn't be doing
+
+558
+00:43:25,930 --> 00:43:29,710
+this. Think back to that order by
+example, where we had an array of
+
+559
+00:43:29,710 --> 00:43:32,500
+allowed values and pulling from
+there. That's probably should have
+
+560
+00:43:32,500 --> 00:43:36,880
+been a better approach. The other
+advantage of this one is it makes it
+
+561
+00:43:36,880 --> 00:43:40,470
+easier for the auditors to find. So
+when I'm looking through code, it'll
+
+562
+00:43:40,470 --> 00:43:46,590
+be really good to see, Oh yes, why
+are you using that? Ok, so how about
+
+563
+00:43:47,360 --> 00:43:50,190
+identifiers in SQL.
+
+564
+00:43:50,190 --> 00:43:53,850
+It's basically the same method where
+you have your query SQL and
+
+565
+00:43:53,850 --> 00:43:58,080
+parameters, but identifiers which is
+your table names and your field
+
+566
+00:43:58,080 --> 00:44:03,210
+names, the things which might be
+coming from the INI or the JSON or
+
+567
+00:44:03,210 --> 00:44:07,680
+the YAMAL config, they get provided
+separately.
+
+568
+00:44:08,850 --> 00:44:12,360
+So you do your first check on your
+SQL and then you go through the
+
+569
+00:44:12,360 --> 00:44:19,830
+identifiers and you just very simply
+check, you know, is the identifier
+
+570
+00:44:19,860 --> 00:44:25,650
+acceptable? And this is very strict,
+but it knows what the restrictions
+
+571
+00:44:25,650 --> 00:44:29,190
+are, and therefore the library is
+able to safely include those
+
+572
+00:44:29,190 --> 00:44:32,640
+identifiers, which are no longer
+literals. But they're applied after
+
+573
+00:44:32,640 --> 00:44:37,650
+the check, and therefore it's
+perfectly safe. So then that gets
+
+574
+00:44:37,650 --> 00:44:39,520
+into the database.
+
+575
+00:44:39,520 --> 00:44:45,510
+How this looks and being used? Well,
+you do DB query as the method, if
+
+576
+00:44:45,510 --> 00:44:48,060
+it's used correctly, where the first
+argument is a developer defined
+
+577
+00:44:48,060 --> 00:44:52,710
+string, that's good. As soon as you
+concatenate in some user data, then
+
+578
+00:44:52,710 --> 00:44:56,740
+it gets rejected. And this is the
+example of using identifiers.
+
+579
+00:44:56,740 --> 00:45:00,960
+Unusual, but it's possible. And
+therefore we are covering the idea of
+
+580
+00:45:00,960 --> 00:45:04,200
+having variable identifiers.
+
+581
+00:45:06,390 --> 00:45:12,510
+If you think back to that database
+abstraction where we had the where
+
+582
+00:45:12,870 --> 00:45:17,860
+method where you could say field or
+value, it meant that you can sort of
+
+583
+00:45:17,880 --> 00:45:22,860
+run the check on the literal check.
+And likewise, with the order by. It
+
+584
+00:45:22,860 --> 00:45:26,550
+might have a different approach with
+order by with the list of allowed
+
+585
+00:45:26,550 --> 00:45:28,650
+values.
+
+586
+00:45:28,650 --> 00:45:34,140
+Command line interface version, you
+can have a parameterized exec kind of
+
+587
+00:45:34,140 --> 00:45:39,480
+function where we would just simply
+check the base command is a literal
+
+588
+00:45:39,870 --> 00:45:42,390
+and we're going to throw an exception
+on this one. We're going to be very
+
+589
+00:45:42,390 --> 00:45:47,480
+strict. This is how you'd apply the
+parameters to that command. It's a
+
+590
+00:45:47,490 --> 00:45:51,480
+very simple loop where we just
+escape  shell arg, you know, the
+
+591
+00:45:51,480 --> 00:45:55,050
+arguments get escaped and added to
+the command and then just simply run.
+
+592
+00:45:56,250 --> 00:46:00,660
+This is how it would work correctly,
+as in the first bit, is that
+
+593
+00:46:00,860 --> 00:46:06,300
+developer defined string. That's
+checked. That's all good. If it's
+
+594
+00:46:06,690 --> 00:46:12,330
+included user data that is also
+checked but rejected.
+
+595
+00:46:12,720 --> 00:46:18,480
+Because, yeah, same with HTML. You
+can render the HTML where you have
+
+596
+00:46:18,480 --> 00:46:23,640
+the arguments provided that's checked
+and obviously encoded correctly.
+
+597
+00:46:23,700 --> 00:46:29,710
+Good. If the user data included that
+would be checked and rejected.
+
+598
+00:46:29,710 --> 00:46:32,970
+For a HTML templating engine, I was
+able to create one in about three
+
+599
+00:46:32,970 --> 00:46:37,560
+hundred lines. You know, this is a
+context aware one.
+
+600
+00:46:37,560 --> 00:46:41,550
+We start off with the protection
+level, as we discussed earlier. I
+
+601
+00:46:41,550 --> 00:46:45,390
+have an array-like structure which
+defines which tags are allowed, the
+
+602
+00:46:45,390 --> 00:46:50,680
+attributes and the the values for
+those attributes. I'm using HTML
+
+603
+00:46:50,680 --> 00:46:56,040
+parsing with an XML mode because I
+don't know, XML creates a certain
+
+604
+00:46:56,040 --> 00:46:58,330
+quality maybe.
+
+605
+00:46:58,330 --> 00:47:01,470
+More importantly, though, it ensures
+that all the tags are nested
+
+606
+00:47:01,470 --> 00:47:05,070
+correctly and all the attributes are
+quoted because you have to make sure
+
+607
+00:47:05,070 --> 00:47:09,810
+you're actually being quoted. There's
+this little section here for walking
+
+608
+00:47:09,810 --> 00:47:13,890
+the nodes to find the question marks
+for parameters and then the bit,
+
+609
+00:47:13,890 --> 00:47:18,030
+which actually does the returning of
+HTML with the parameters that are now
+
+610
+00:47:18,030 --> 00:47:21,700
+checked. And then at the end, I've
+included an unsafe value object.
+
+611
+00:47:21,700 --> 00:47:25,480
+Shouldn't be needed, and so far I
+have not needed to use it. How this
+
+612
+00:47:25,480 --> 00:47:29,530
+looks. Well, a bit like the
+templating engine before. I'm using
+
+613
+00:47:29,530 --> 00:47:33,550
+question marks for the parameters of
+all the names, because in this case
+
+614
+00:47:33,550 --> 00:47:39,220
+we were just using short snippets and
+therefore it's nice and simple. You
+
+615
+00:47:39,220 --> 00:47:45,340
+can also do a template and then use
+it multiple times. That's good. And
+
+616
+00:47:45,340 --> 00:47:48,670
+if the developer makes a mistake and
+includes the user data in that first
+
+617
+00:47:48,670 --> 00:47:53,410
+argument, it gets rejected.
+Exceptions fine.
+
+618
+00:47:53,410 --> 00:47:59,290
+And also because it context checking
+when a normal URL is included, that
+
+619
+00:47:59,290 --> 00:48:03,970
+is all good. If it's a JavaScript
+URL, it's rejected.
+
+620
+00:48:05,050 --> 00:48:09,070
+And you know you can actually go a
+little bit further by having a href
+
+621
+00:48:09,070 --> 00:48:13,660
+image source. They ensure they are
+URLs. Width and height are integers
+
+622
+00:48:14,680 --> 00:48:18,700
+as according to the HTML spec, they
+are supposed to be. Alt and
+
+623
+00:48:18,700 --> 00:48:20,230
+figcaption are text.
+
+624
+00:48:21,460 --> 00:48:25,270
+So how would this work in, let's say,
+10 years time? Once all of the
+
+625
+00:48:25,270 --> 00:48:28,750
+libraries have started using this?
+Because you notice the libraries here
+
+626
+00:48:28,750 --> 00:48:35,290
+are just checking their input, the
+output and specifically how the
+
+627
+00:48:35,290 --> 00:48:40,900
+native functions like my SQL query
+and my SQL prepare work. Those are
+
+628
+00:48:40,900 --> 00:48:43,180
+not being checked yet.
+
+629
+00:48:44,440 --> 00:48:50,590
+Now how we go about this is very much
+up to debate. But theoretically, how
+
+630
+00:48:50,590 --> 00:48:55,600
+about they accept everything, but
+they can warn, if not given a string
+
+631
+00:48:55,600 --> 00:49:00,100
+from a trusted developer? However,
+there also needs to be a way for
+
+632
+00:49:00,100 --> 00:49:05,680
+special cases to be trusted, e.g.
+strings created by a library. You'll
+
+633
+00:49:05,680 --> 00:49:09,250
+notice this is very similar to the
+Trusted Types example we talked about
+
+634
+00:49:09,250 --> 00:49:14,260
+earlier in JavaScript. That
+firewall-like structure. Maybe this
+
+635
+00:49:14,260 --> 00:49:20,010
+can be done with a stringable value
+object. So that value objects we
+
+636
+00:49:20,010 --> 00:49:24,340
+created earlier for the unsafe value,
+just rename a few things, and we'll
+
+637
+00:49:24,340 --> 00:49:30,700
+instead have it a way of marking this
+SQL string as safe, and it still acts
+
+638
+00:49:30,700 --> 00:49:36,280
+like a string. But now it's sort of
+wrapped in an object. How this could
+
+639
+00:49:36,280 --> 00:49:40,240
+be used? Well, you'd have some way to
+say that this particular stringable
+
+640
+00:49:40,510 --> 00:49:44,100
+object is trusted.
+
+641
+00:49:44,100 --> 00:49:47,740
+For shortness I've just said it can
+be trusted for SQL. In reality, it's
+
+642
+00:49:47,740 --> 00:49:52,840
+probably going to be more of a set
+way of saying, Oh, it's this argument
+
+643
+00:49:52,840 --> 00:49:58,870
+for this method or this function,
+because what is safe in one system,
+
+644
+00:49:58,870 --> 00:50:02,890
+they're not necessarily safe in
+another. So this is probably fine for
+
+645
+00:50:02,890 --> 00:50:06,750
+my SQL, but might not be fine for
+PostgreSQL.
+
+646
+00:50:06,750 --> 00:50:12,100
+When it actually comes to actually
+using it, the query method in this
+
+647
+00:50:12,100 --> 00:50:17,110
+case will build up its SQL, which is
+no longer a literal, but it will wrap
+
+648
+00:50:17,110 --> 00:50:21,910
+it in this DB trusted SQL value
+object. But because that value object
+
+649
+00:50:21,910 --> 00:50:26,650
+has now been trusted, the my SQL I
+query function says, Yep, that's
+
+650
+00:50:26,650 --> 00:50:30,310
+fine. I'm accepting that no warnings,
+no errors or anything because you've
+
+651
+00:50:30,310 --> 00:50:34,450
+gone through that process. There
+would need to be a way to disable the
+
+652
+00:50:34,450 --> 00:50:38,470
+check. But the beauty of this, it
+means that the developers are
+
+653
+00:50:38,470 --> 00:50:42,370
+acknowledging the fact that they have
+a problem and sort of saying, Yeah, I
+
+654
+00:50:42,370 --> 00:50:46,210
+know I'm doing an unsafe thing and
+that's up to them. Know that's their
+
+655
+00:50:46,210 --> 00:50:51,700
+choice. There would need to be a way
+to enforce the check because some
+
+656
+00:50:51,850 --> 00:50:56,380
+programs need that extra level of
+protection, and it would be good for
+
+657
+00:50:56,380 --> 00:50:59,860
+developers who are confident their
+system to be able to enforce it.
+
+658
+00:50:59,980 --> 00:51:04,540
+Again, talking about medical records
+and banking data, anything like that.
+
+659
+00:51:04,540 --> 00:51:07,420
+You might want extra level.
+
+660
+00:51:07,420 --> 00:51:10,690
+But yeah, in short, distinguishing
+strings from a trusted developer from
+
+661
+00:51:10,690 --> 00:51:14,110
+strings that may be attacker
+controlled. With that distinction, we
+
+662
+00:51:14,110 --> 00:51:17,770
+can stop injection vulnerabilities.
+Thank you.
+
