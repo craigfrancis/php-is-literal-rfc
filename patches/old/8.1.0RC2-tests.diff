@@ -1,0 +1,523 @@
+diff --git a/ext/standard/tests/strings/literals/001.phpt b/ext/standard/tests/strings/literals/001.phpt
+new file mode 100644
+index 0000000000000..6adcb113d040d
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/001.phpt
+@@ -0,0 +1,13 @@
++--TEST--
++Literal Strings
++--ENV--
++TAINTED=strings
++--FILE--
++<?php
++var_dump(
++    is_literal("strings"),
++    is_literal($_ENV["TAINTED"]));
++?>
++--EXPECT--
++bool(true)
++bool(false)
+diff --git a/ext/standard/tests/strings/literals/002.phpt b/ext/standard/tests/strings/literals/002.phpt
+new file mode 100644
+index 0000000000000..d169233e834f5
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/002.phpt
+@@ -0,0 +1,16 @@
++--TEST--
++Literal Variables Compile Time Concat
++--FILE--
++<?php
++var_dump(
++    "literal" . "string",
++        is_literal("literal" . "string"),
++     24 . "" . 42,
++        is_literal(24 . "" . 42));
++?>
++--EXPECT--
++string(13) "literalstring"
++bool(true)
++string(4) "2442"
++bool(false)
++
+diff --git a/ext/standard/tests/strings/literals/003.phpt b/ext/standard/tests/strings/literals/003.phpt
+new file mode 100644
+index 0000000000000..04980206e0df7
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/003.phpt
+@@ -0,0 +1,52 @@
++--TEST--
++Literal Variables VM Concat
++--ENV--
++TAINTED=strings
++--FILE--
++<?php
++$literal = "literal";
++$string = "strings";
++
++$twoFour = 24;
++$fourTwo = 42;
++
++var_dump(
++    $literal . " " . $string,
++        is_literal($literal . $string),
++    $twoFour . "" . $fourTwo,
++        is_literal($twoFour . "" . $fourTwo),
++    "not " . "literal " . $_ENV["TAINTED"],
++        is_literal("not " . "literal " . $_ENV["TAINTED"]),
++     $literal . $string,
++        is_literal($literal . $string),
++     'literal' . 'strings',
++        is_literal('literal' . 'strings'),
++);
++
++$literal .= $string;
++
++var_dump(
++    $literal,
++        is_literal($literal));
++        
++$literal .= $_ENV["TAINTED"];
++
++var_dump(
++    $literal,
++        is_literal($literal));
++?>
++--EXPECT--
++string(15) "literal strings"
++bool(true)
++string(4) "2442"
++bool(false)
++string(19) "not literal strings"
++bool(false)
++string(14) "literalstrings"
++bool(true)
++string(14) "literalstrings"
++bool(true)
++string(14) "literalstrings"
++bool(true)
++string(21) "literalstringsstrings"
++bool(false)
+diff --git a/ext/standard/tests/strings/literals/004.phpt b/ext/standard/tests/strings/literals/004.phpt
+new file mode 100644
+index 0000000000000..83771ec195ab3
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/004.phpt
+@@ -0,0 +1,28 @@
++--TEST--
++Literal Variables VM Rope
++--ENV--
++TAINTED=strings
++--FILE--
++<?php
++$literal = "literal";
++$string = "strings";
++
++$twoFour = 24;
++$fourTwo = 42;
++
++var_dump(
++    "{$literal}{$string}",
++        is_literal("{$literal}{$string}"),
++    "{$twoFour}{$fourTwo}",
++        is_literal("{$twoFour}{$fourTwo}"),
++    "not {$literal} {$_ENV["TAINTED"]}",
++        is_literal("not {$literal} {$_ENV["TAINTED"]}")
++);
++?>
++--EXPECT--
++string(14) "literalstrings"
++bool(true)
++string(4) "2442"
++bool(false)
++string(19) "not literal strings"
++bool(false)
+diff --git a/ext/standard/tests/strings/literals/005.phpt b/ext/standard/tests/strings/literals/005.phpt
+new file mode 100644
+index 0000000000000..71b8921e66b0d
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/005.phpt
+@@ -0,0 +1,79 @@
++--TEST--
++Literal Variables Single Chars
++--FILE--
++<?php
++$chars = [
++    'a',
++    'b',
++    'c',
++    '',
++    '\'',
++    '\\',
++    '/',
++    /* and so on */
++];
++
++foreach ($chars as $char) {
++    var_dump(
++        $char,
++        is_literal($char));
++    echo PHP_EOL;
++}
++
++class A {}
++class B {}
++class C {}
++
++foreach ([A::class, B::class, C::class] as $class) {
++    $reflector = new ReflectionClass($class);
++
++    var_dump(
++        $class, 
++        is_literal($class));
++    echo PHP_EOL;
++    
++    var_dump(
++        $reflector->getName(),
++        is_literal($reflector->getName()));
++    echo PHP_EOL;
++}
++?>
++--EXPECT--
++string(1) "a"
++bool(true)
++
++string(1) "b"
++bool(true)
++
++string(1) "c"
++bool(true)
++
++string(0) ""
++bool(true)
++
++string(1) "'"
++bool(true)
++
++string(1) "\"
++bool(true)
++
++string(1) "/"
++bool(true)
++
++string(1) "A"
++bool(true)
++
++string(1) "A"
++bool(true)
++
++string(1) "B"
++bool(true)
++
++string(1) "B"
++bool(true)
++
++string(1) "C"
++bool(true)
++
++string(1) "C"
++bool(true)
+diff --git a/ext/standard/tests/strings/literals/006.phpt b/ext/standard/tests/strings/literals/006.phpt
+new file mode 100644
+index 0000000000000..ea78393c61bf6
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/006.phpt
+@@ -0,0 +1,30 @@
++--TEST--
++Literal Variables in Constant Arrays
++--FILE--
++<?php
++$array = ['aa' => 'aa', 'bb' => 'bb', 'cc' => 'cc'];
++
++foreach ($array as $k => $v)
++    var_dump(is_literal($k), is_literal($v));
++
++echo PHP_EOL;
++
++$array = ['aa' => 1, 'bb' => 2, 'cc' => 3];
++
++foreach ($array as $k => $v)
++    var_dump(is_literal($k), is_literal($v));
++?>
++--EXPECT--
++bool(true)
++bool(true)
++bool(true)
++bool(true)
++bool(true)
++bool(true)
++
++bool(true)
++bool(false)
++bool(true)
++bool(false)
++bool(true)
++bool(false)
+diff --git a/ext/standard/tests/strings/literals/007.phpt b/ext/standard/tests/strings/literals/007.phpt
+new file mode 100644
+index 0000000000000..8beb27566981d
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/007.phpt
+@@ -0,0 +1,17 @@
++--TEST--
++Literal Variables in Non Constant Arrays
++--ENV--
++STR=string
++INT=42
++--FILE--
++<?php
++$array = ['aa' => $_ENV["STR"], 'bb' => (int) $_ENV["INT"]];
++
++foreach ($array as $k => $v)
++    var_dump(is_literal($k), is_literal($v));
++?>
++--EXPECT--
++bool(true)
++bool(false)
++bool(true)
++bool(false)
+diff --git a/ext/standard/tests/strings/literals/008.phpt b/ext/standard/tests/strings/literals/008.phpt
+new file mode 100644
+index 0000000000000..b9bf440fcae1b
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/008.phpt
+@@ -0,0 +1,59 @@
++--TEST--
++Literal Variables in Class Declarations
++--FILE--
++<?php
++#[\Bar("parameter")]
++class Foo {
++    const LITERAL = "LITERAL";
++    static $PROPERTY = "STRING"; 
++    
++    public function method($qux) {}
++}
++
++$reflector = new ReflectionClass(Foo::class);
++
++var_dump(
++    $reflector->getName(),
++        is_literal($reflector->getName()));
++
++foreach ($reflector->getAttributes() as $attribute) {
++    $parameters = $attribute->getArguments();
++    
++    var_dump(
++        $attribute->getName(),
++            is_literal($attribute->getName()));
++
++    foreach ($parameters as $parameter => $value) {
++        var_dump(
++            $value,
++            is_literal($value));
++    }
++}
++
++$reflector = new ReflectionMethod(Foo::class, "method");
++
++foreach ($reflector->getParameters() as $parameter) {
++    var_dump(
++        $parameter->getName(),
++        is_literal($parameter->getName()));
++}
++
++var_dump(
++    FOO::LITERAL,
++        is_literal(FOO::LITERAL),
++    Foo::$PROPERTY,
++        is_literal(FOO::$PROPERTY));
++?>
++--EXPECT--
++string(3) "Foo"
++bool(true)
++string(3) "Bar"
++bool(true)
++string(9) "parameter"
++bool(true)
++string(3) "qux"
++bool(true)
++string(7) "LITERAL"
++bool(true)
++string(6) "STRING"
++bool(true)
+diff --git a/ext/standard/tests/strings/literals/009.phpt b/ext/standard/tests/strings/literals/009.phpt
+new file mode 100644
+index 0000000000000..e9cbd71e2428f
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/009.phpt
+@@ -0,0 +1,42 @@
++--TEST--
++Literal Variables in Function Declarations
++--FILE--
++<?php
++#[\Bar("parameter")]
++function foo($qux) {}
++
++$reflector = new ReflectionFunction('foo');
++
++var_dump(
++    $reflector->getName(), 
++        is_literal($reflector->getName()));
++
++foreach ($reflector->getAttributes() as $attribute) {
++    $parameters = $attribute->getArguments();
++    
++    var_dump(
++        $attribute->getName(),
++            is_literal($attribute->getName()));
++
++    foreach ($parameters as $parameter => $value) {
++        var_dump(
++            $value,
++            is_literal($value));
++    }
++}
++
++foreach ($reflector->getParameters() as $parameter) {
++    var_dump(
++        $parameter->getName(),
++        is_literal($parameter->getName()));
++}
++?>
++--EXPECT--
++string(3) "foo"
++bool(true)
++string(3) "Bar"
++bool(true)
++string(9) "parameter"
++bool(true)
++string(3) "qux"
++bool(true)
+diff --git a/ext/standard/tests/strings/literals/010.phpt b/ext/standard/tests/strings/literals/010.phpt
+new file mode 100644
+index 0000000000000..71d9e9427c693
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/010.phpt
+@@ -0,0 +1,29 @@
++--TEST--
++Literal Variables in Namespaces
++--FILE--
++<?php
++namespace Foo {
++    class Bar {}
++    
++    function baz() {}
++}
++
++namespace {
++    $reflector = new \ReflectionClass(\Foo\Bar::class);
++
++    var_dump(
++        $reflector->getName(),
++        is_literal($reflector->getName()));
++
++    $reflector = new \ReflectionFunction('\Foo\baz');
++
++    var_dump(
++        $reflector->getName(),
++        is_literal($reflector->getName())); 
++}
++?>
++--EXPECT--
++string(7) "Foo\Bar"
++bool(true)
++string(7) "Foo\baz"
++bool(true)
+diff --git a/ext/standard/tests/strings/literals/011.phpt b/ext/standard/tests/strings/literals/011.phpt
+new file mode 100644
+index 0000000000000..e1b6aa454c154
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/011.phpt
+@@ -0,0 +1,19 @@
++--TEST--
++Literal Variables implode
++--FILE--
++<?php
++var_dump(
++    is_literal(
++        implode("delim", [1,2,3])));
++
++var_dump(
++    is_literal(
++        implode("delim", ["Hello", "World"])));
++var_dump(
++    is_literal(
++        implode(["Hello", "World"])));
++?>
++--EXPECT--
++bool(false)
++bool(true)
++bool(true)
+diff --git a/ext/standard/tests/strings/literals/013.phpt b/ext/standard/tests/strings/literals/013.phpt
+new file mode 100644
+index 0000000000000..778a043ee234c
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/013.phpt
+@@ -0,0 +1,40 @@
++--TEST--
++Literal Variables str_pad
++--ENV--
++TAINTED=string
++--FILE--
++<?php
++var_dump(
++    is_literal(
++        str_pad("hello", 20)));
++var_dump(
++    is_literal(
++        str_pad("hello", 20, "pad")));
++
++echo PHP_EOL;
++        
++var_dump(
++    is_literal(
++        str_pad($_ENV["TAINTED"], 20)));
++var_dump(
++    is_literal(
++        str_pad("hello", 20, $_ENV["TAINTED"])));
++        
++echo PHP_EOL;
++
++var_dump(
++    is_literal(
++        str_pad("hello", 10, 9)));
++var_dump(
++    is_literal(
++        str_pad("hello", 10, 10)));
++?>
++--EXPECT--
++bool(true)
++bool(true)
++
++bool(false)
++bool(false)
++
++bool(false)
++bool(false)
+diff --git a/ext/standard/tests/strings/literals/014.phpt b/ext/standard/tests/strings/literals/014.phpt
+new file mode 100644
+index 0000000000000..e65d36f55be84
+--- /dev/null
++++ b/ext/standard/tests/strings/literals/014.phpt
+@@ -0,0 +1,21 @@
++--TEST--
++Literal Variables str_repeat
++--ENV--
++TAINTED=string
++--FILE--
++<?php
++var_dump(
++    is_literal(
++        str_repeat("untainted", 2)),
++    is_literal(
++        str_repeat($_ENV["TAINTED"], 2)),
++    is_literal(
++        str_repeat(4, 4)), # false
++    is_literal(
++        str_repeat(42, 4))); # false
++?>
++--EXPECT--
++bool(true)
++bool(false)
++bool(false)
++bool(false)
