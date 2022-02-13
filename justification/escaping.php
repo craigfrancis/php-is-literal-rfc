@@ -65,8 +65,11 @@
 //--------------------------------------------------
 // Bad Escaping
 // htmlentities() doesn't encode single quotes by default.
-// I got this fixed for PHP 8.1
-// https://github.com/php/php-src/commit/50eca61f68815005f3b0f808578cc1ce3b4297f0
+//  Before PHP 8.1
+//    https://github.com/php/php-src/commit/50eca61f68815005f3b0f808578cc1ce3b4297f0
+//  Java, Apache Commons
+//   https://commons.apache.org/proper/commons-text/javadocs/api-release/org/apache/commons/text/StringEscapeUtils.html#escapeHtml4(java.lang.String)
+//   "Note that the commonly used apostrophe escape character (&apos;) is not a legal entity and so is not supported"
 
 	$_GET['url'] = "/' onerror='alert(1)";
 
