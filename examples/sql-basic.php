@@ -20,12 +20,12 @@
 		//--------------------------------------------------
 		// Common
 
-			protected $protection_level = 1;
+			protected int $protection_level = 1;
 				// 0 = No checks, could be useful on the production server.
 				// 1 = Just warnings, the default.
 				// 2 = Exceptions, for anyone who wants to be absolutely sure.
 
-			function literal_check($var) {
+			function literal_check(mixed $var): void {
 				if (!function_exists('is_literal') || is_literal($var)) {
 					// Fine - This is a programmer defined string (bingo), or not using PHP 8.1
 				} else if ($var instanceof unsafe_value) {
@@ -38,48 +38,63 @@
 					throw new Exception('Non-literal value detected!');
 				}
 			}
-			function enforce_injection_protection() {
+			function enforce_injection_protection(): void {
 				$this->protection_level = 2;
 			}
-			function unsafe_disable_injection_protection() {
+			function unsafe_disable_injection_protection(): void {
 				$this->protection_level = 0; // Not recommended, try `new unsafe_value('XXX')` for special cases.
 			}
 
 		//--------------------------------------------------
 		// Example
 
-			function query($sql, $parameters = [], $aliases = []) {
+			/**
+			 * @param literal-string $sql
+			 * @param array<int, int|string> $parameters
+			 * @param array<string, string> $aliases
+			 */
+			function query(string $sql, array $parameters = [], array $aliases = []): void {
 
 				$this->literal_check($sql);
 
 				foreach ($aliases as $name => $value) {
-					if (!preg_match('/^[a-z0-9_]+$/', $name)) {
-						throw new Exception('Invalid alias name "' . $name . '"');
-					} else if (!preg_match('/^[a-z0-9_]+$/', $value)) {
-						throw new Exception('Invalid alias value "' . $value . '"');
-					} else {
-						$sql = str_replace('{' . $name . '}', '`' . $value . '`', $sql);
-					}
+					// if (!preg_match('/^[a-z0-9_]+$/', $name))  throw new Exception('Invalid alias name "' . $name . '"');
+					// if (!preg_match('/^[a-z0-9_]+$/', $value)) throw new Exception('Invalid alias value "' . $value . '"');
+					$sql = str_replace('{' . $name . '}', '`' . str_replace('`', '``', $value) . '`', $sql);
 				}
 
-				var_dump($sql);
+				print_r($sql);
 				echo "\n\n";
 
 			}
 
-			// https://github.com/drupal/drupal/blob/8eb8dcc8425295d1a4278613031812bff7d98c15/includes/database/database.inc#L2036
-			function placeholders($arguments) {
-				return implode(',', array_fill(0, count($arguments), '?'));
+			/**
+			 * https://www.drupal.org/docs/7/security/writing-secure-code/database-access#s-multiple-arguments
+			 * https://github.com/drupal/drupal/blob/8eb8dcc8425295d1a4278613031812bff7d98c15/includes/database/database.inc#L2036
+			 * https://stackoverflow.com/questions/907806/passing-an-array-to-a-query-using-a-where-clause/23641033#23641033
+			 * https://www.php.net/manual/en/pdostatement.execute.php#example-1047
+			 * @return literal-string
+			 */
+			function placeholders(int $count): string {
+
+				$sql = '?';
+				for ($k = 1; $k < $count; $k++) {
+					$sql .= ',?';
+				}
+				return $sql;
+
+				// return implode(',', array_fill(0, $count, '?'));
+
 			}
 
 	}
 
 	class unsafe_value {
-		private $value = '';
-		function __construct($unsafe_value) {
+		private string $value = '';
+		function __construct(string $unsafe_value) {
 			$this->value = $unsafe_value;
 		}
-		function __toString() {
+		function __toString(): string {
 			return $this->value;
 		}
 	}
@@ -89,12 +104,15 @@
 
 
 	$db = new db();
+	// $db->unsafe_disable_injection_protection();
 
-	$id = sprintf('123'); // Using sprintf to mark as a non-literal string
+	$id = sprintf((string) ($_GET['id'] ?? '1')); // Use sprintf() to mark as a non-literal string
 
 	$db->query('SELECT name FROM user WHERE id = ?', [$id]);
 
 	$db->query('SELECT name FROM user WHERE id = ' . $id); // INSECURE
+
+	echo '--------------------------------------------------' . "\n";
 
 
 //--------------------------------------------------
@@ -107,10 +125,14 @@
 
 
 
-	$name = ($_GET['name'] ?? 'MyName');
+	$name = sprintf((string) ($_GET['name'] ?? 'MyName')); // Use sprintf() to mark as a non-literal string
 	if ($name) {
-		$where_sql .= ' AND u.name LIKE ?';
+
+		$where_sql .= ' AND
+			u.name LIKE ?';
+
 		$parameters[] = '%' . $name . '%';
+
 	}
 
 
@@ -118,7 +140,9 @@
 	$ids = [1, 2, 3];
 	if (count($ids) > 0) {
 
-		$where_sql .= ' AND u.id IN (' . $db->placeholders($ids) . ')';
+		$where_sql .= ' AND
+			u.id IN (' . $db->placeholders(count($ids)) . ')';
+
 		$parameters = array_merge($parameters, $ids);
 
 	}
@@ -136,7 +160,7 @@
 
 
 
-	$order_by = ($_GET['sort'] ?? 'email');
+	$order_by = sprintf((string) ($_GET['sort'] ?? 'email')); // Use sprintf() to mark as a non-literal string
 	$order_fields = ['name', 'email'];
 	$order_id = array_search($order_by, $order_fields);
 	$sql .= '
@@ -156,8 +180,45 @@
 	$db->query($sql, $parameters);
 
 
+	echo '--------------------------------------------------' . "\n\n";
+
+
 //--------------------------------------------------
-// Example 3, with aliases.
+// Example 3, field aliases (try to avoid)
+
+
+	$order_by = sprintf((string) ($_GET['sort'] ?? 'email')); // Use sprintf() to mark as a non-literal string
+
+
+	$sql = '
+		SELECT
+			u.name
+		FROM
+			user AS u
+		ORDER BY
+			' . $order_by;
+
+	$db->query($sql);
+
+
+	$sql = '
+		SELECT
+			u.name
+		FROM
+			user AS u
+		ORDER BY
+			{sort}';
+
+	$db->query($sql, [], [
+			'sort' => $order_by,
+		]);
+
+
+	echo '--------------------------------------------------' . "\n\n";
+
+
+//--------------------------------------------------
+// Example 4, bit more complex
 
 
 	$parameters = [];
