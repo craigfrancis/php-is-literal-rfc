@@ -20,12 +20,12 @@
 		//--------------------------------------------------
 		// Common
 
-			protected $protection_level = 1;
+			protected int $protection_level = 1;
 				// 0 = No checks, could be useful on the production server.
 				// 1 = Just warnings, the default.
 				// 2 = Exceptions, for anyone who wants to be absolutely sure.
 
-			function literal_check($var) {
+			function literal_check(mixed $var): void {
 				if (!function_exists('is_literal') || is_literal($var)) {
 					// Fine - This is a programmer defined string (bingo), or not using PHP 8.1
 				} else if ($var instanceof unsafe_value) {
@@ -38,17 +38,22 @@
 					throw new Exception('Non-literal value detected!');
 				}
 			}
-			function enforce_injection_protection() {
+			function enforce_injection_protection(): void {
 				$this->protection_level = 2;
 			}
-			function unsafe_disable_injection_protection() {
+			function unsafe_disable_injection_protection(): void {
 				$this->protection_level = 0; // Not recommended, try `new unsafe_value('XXX')` for special cases.
 			}
 
 		//--------------------------------------------------
 		// Example
 
-			function query($sql, $parameters = [], $aliases = []) {
+			/**
+			 * @param literal-string $sql
+			 * @param array<int, int|string> $parameters
+			 * @param array<string, string> $aliases
+			 */
+			function query(string $sql, array $parameters = [], array $aliases = []): void {
 
 				$this->literal_check($sql);
 
@@ -63,13 +68,14 @@
 
 			}
 
-			/*
+			/**
 			 * https://www.drupal.org/docs/7/security/writing-secure-code/database-access#s-multiple-arguments
 			 * https://github.com/drupal/drupal/blob/8eb8dcc8425295d1a4278613031812bff7d98c15/includes/database/database.inc#L2036
 			 * https://stackoverflow.com/questions/907806/passing-an-array-to-a-query-using-a-where-clause/23641033#23641033
 			 * https://www.php.net/manual/en/pdostatement.execute.php#example-1047
+			 * @return literal-string
 			 */
-			function placeholders($count) {
+			function placeholders(int $count): string {
 
 				$sql = '?';
 				for ($k = 1; $k < $count; $k++) {
@@ -84,11 +90,11 @@
 	}
 
 	class unsafe_value {
-		private $value = '';
-		function __construct($unsafe_value) {
+		private string $value = '';
+		function __construct(string $unsafe_value) {
 			$this->value = $unsafe_value;
 		}
-		function __toString() {
+		function __toString(): string {
 			return $this->value;
 		}
 	}
@@ -100,7 +106,7 @@
 	$db = new db();
 	// $db->unsafe_disable_injection_protection();
 
-	$id = sprintf($_GET['id'] ?? '1'); // Use sprintf() to mark as a non-literal string
+	$id = sprintf((string) ($_GET['id'] ?? '1')); // Use sprintf() to mark as a non-literal string
 
 	$db->query('SELECT name FROM user WHERE id = ?', [$id]);
 
@@ -119,7 +125,7 @@
 
 
 
-	$name = sprintf($_GET['name'] ?? 'MyName'); // Use sprintf() to mark as a non-literal string
+	$name = sprintf((string) ($_GET['name'] ?? 'MyName')); // Use sprintf() to mark as a non-literal string
 	if ($name) {
 
 		$where_sql .= ' AND
@@ -154,7 +160,7 @@
 
 
 
-	$order_by = sprintf($_GET['sort'] ?? 'email'); // Use sprintf() to mark as a non-literal string
+	$order_by = sprintf((string) ($_GET['sort'] ?? 'email')); // Use sprintf() to mark as a non-literal string
 	$order_fields = ['name', 'email'];
 	$order_id = array_search($order_by, $order_fields);
 	$sql .= '
@@ -181,7 +187,7 @@
 // Example 3, field aliases (try to avoid)
 
 
-	$order_by = sprintf($_GET['sort'] ?? 'email'); // Use sprintf() to mark as a non-literal string
+	$order_by = sprintf((string) ($_GET['sort'] ?? 'email')); // Use sprintf() to mark as a non-literal string
 
 
 	$sql = '
