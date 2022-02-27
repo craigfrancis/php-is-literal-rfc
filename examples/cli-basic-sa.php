@@ -3,7 +3,11 @@
 //--------------------------------------------------
 // Function
 
-	function parameterised_exec($cmd, $args = []) {
+	/**
+	 * @param literal-string $cmd
+	 * @param array<int, string> $args
+	 */
+	function parameterised_exec(string $cmd, array $args = []): string|false {
 
 		if (function_exists('is_literal') && !is_literal($cmd)) {
 			throw new Exception('The first argument must be a literal');
@@ -31,7 +35,7 @@
 //--------------------------------------------------
 // Example
 
-	$search = sprintf($_GET['q'] ?? '');
+	$search = sprintf((string) ($_GET['q'] ?? 'example'));
 
 	if ($search) {
 

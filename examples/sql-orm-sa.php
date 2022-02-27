@@ -20,12 +20,12 @@
 		//--------------------------------------------------
 		// Common
 
-			protected $protection_level = 1;
+			protected int $protection_level = 1;
 				// 0 = No checks, could be useful on the production server.
 				// 1 = Just warnings, the default.
 				// 2 = Exceptions, for anyone who wants to be absolutely sure.
 
-			function literal_check($var) {
+			function literal_check(mixed $var): void {
 				if (!function_exists('is_literal') || is_literal($var)) {
 					// Fine - This is a programmer defined string (bingo), or not using PHP 8.1
 				} else if ($var instanceof unsafe_value) {
@@ -38,17 +38,21 @@
 					throw new Exception('Non-literal value detected!');
 				}
 			}
-			function enforce_injection_protection() {
+			function enforce_injection_protection(): void {
 				$this->protection_level = 2;
 			}
-			function unsafe_disable_injection_protection() {
+			function unsafe_disable_injection_protection(): void {
 				$this->protection_level = 0; // Not recommended, try `new unsafe_value('XXX')` for special cases.
 			}
 
 		//--------------------------------------------------
 		// Example, basic
 
-			public function where($sql, $parameters = []) {
+			/**
+			 * @param literal-string $sql
+			 * @param array<int, int|string> $parameters
+			 */
+			public function where(string $sql, array $parameters = []): void {
 
 				$this->literal_check($sql);
 
@@ -61,16 +65,26 @@
 		// Example, CakePHP - it's WHERE clause can be a
 		// fairly complicated array, and easy to get wrong.
 
-			public function find($finder, $conditions) {
+			/**
+			 * This extended type checking doesn't really work
+			 * with the Static Analysis tools.
+			 *
+			 * @param array<int, literal-string|array<mixed>>|array<literal-string, int|string|array<mixed>> $conditions
+			 */
+			public function find(string $finder, array $conditions): void {
 
 				print_r($this->_addConditions($conditions));
 				echo "\n--------------------------------------------------\n\n";
 
 			}
 
-			private function _addConditions($conditions, $conjunction = 'AND') {
+			/**
+			 * @param array<int, literal-string|array<mixed>>|array<literal-string, int|string|array<mixed>> $conditions
+			 * @param literal-string $conjunction
+			 * @return array{literal-string, array<int, mixed>}
+			 */
+			private function _addConditions(array $conditions, string $conjunction = 'AND'): array {
 
-				// Using
 				// https://github.com/cakephp/cakephp/blob/ab052da10dc5ceb2444c29aef838d10844fe5995/src/Database/Expression/QueryExpression.php#L654
 
 				$operators = ['and', 'or', 'xor'];
@@ -80,37 +94,39 @@
 
 				foreach ($conditions as $k => $c) {
 
-					$numericKey = is_numeric($k);
+					if (is_numeric($k)) {
 
-					$isArray = is_array($c);
-					$isOperator = false;
-					if (!$numericKey) {
-						$normalizedKey = strtolower($k);
-						$isOperator = in_array($normalizedKey, $operators);
-						// $isNot = $normalizedKey === 'not';
-					}
+						if (is_array($c)) {
+							/** @var array<int, array<mixed>> $sub_conditions */
+							$sub_conditions = $c;
+							list($new_sql, $new_parameters) = $this->_addConditions($sub_conditions, 'AND');
+							$sql[] = $new_sql;
+							$parameters = array_merge($parameters, $new_parameters);
+						} else if (is_string($c)) {
+							$this->literal_check($c);
+							$sql[] = $c;
+						}
 
-					if ($numericKey && is_string($c)) {
-						$this->literal_check($c);
-						$sql[] = $c;
-						continue;
-					}
+					} else {
 
-					if ($numericKey && $isArray || $isOperator) {
-						list($new_sql, $new_parameters) = $this->_addConditions($c, ($numericKey ? 'AND' : $k));
-						$sql[] = $new_sql;
-						$parameters = array_merge($parameters, $new_parameters);
-						continue;
-					}
+						$operatorId = array_search(strtolower($k), $operators);
+						if ($operatorId !== false) {
+							/** @var array<literal-string, int|string|array<mixed>> $sub_conditions */
+							$sub_conditions = $c;
+							list($new_sql, $new_parameters) = $this->_addConditions($sub_conditions, $operators[$operatorId]);
+							$sql[] = $new_sql;
+							$parameters = array_merge($parameters, $new_parameters);
+						} else {
+							$this->literal_check($k);
+							$sql[] = $k . ' = ?';
+							$parameters[] = $c;
+						}
 
-					if (!$numericKey) {
-						$this->literal_check($k);
-						$sql[] = $k . ' = ?';
-						$parameters[] = $c;
 					}
 
 				}
 
+				/** @var literal-string $sql */
 				$sql = '(' . implode(' ' . $conjunction . ' ', $sql) . ')';
 
 				return [$sql, $parameters];
@@ -120,11 +136,11 @@
 	}
 
 	class unsafe_value {
-		private $value = '';
-		function __construct($unsafe_value) {
+		private string $value = '';
+		function __construct(string $unsafe_value) {
 			$this->value = $unsafe_value;
 		}
-		function __toString() {
+		function __toString(): string {
 			return $this->value;
 		}
 	}
@@ -137,7 +153,7 @@
 
 	$articles = new articles();
 
-	$id = sprintf($_GET['id'] ?? '1'); // Using sprintf to mark as a non-literal string
+	$id = sprintf((string) ($_GET['id'] ?? '1')); // Using sprintf to mark as a non-literal string
 
 //--------------------------------------------------
 // Basic WHERE example, as found in:
@@ -180,7 +196,7 @@
 //--------------------------------------------------
 // CakePHP, Example 3
 
-	$conjunction = ($_GET['conjunction'] ?? 'OR');
+	$conjunction = ((string) ($_GET['conjunction'] ?? 'OR'));
 
 	$articles->find('all', [
 			$conjunction => [ // INSECURE
