@@ -20,12 +20,12 @@
 		//--------------------------------------------------
 		// Common
 
-			protected $protection_level = 1;
+			protected int $protection_level = 1;
 				// 0 = No checks, could be useful on the production server.
 				// 1 = Just warnings, the default.
 				// 2 = Exceptions, for anyone who wants to be absolutely sure.
 
-			function literal_check($var) {
+			function literal_check(mixed $var): void {
 				if (!function_exists('is_literal') || is_literal($var)) {
 					// Fine - This is a programmer defined string (bingo), or not using PHP 8.1
 				} else if ($var instanceof unsafe_value) {
@@ -38,21 +38,29 @@
 					throw new Exception('Non-literal value detected!');
 				}
 			}
-			function enforce_injection_protection() {
+			function enforce_injection_protection(): void {
 				$this->protection_level = 2;
 			}
-			function unsafe_disable_injection_protection() {
+			function unsafe_disable_injection_protection(): void {
 				$this->protection_level = 0; // Not recommended, try `new unsafe_value('XXX')` for special cases.
 			}
 
 		//--------------------------------------------------
 		// Variables
 
-			protected $template_end = 0;
-			protected $template_parameters = [];
-			protected $template_parameter_types = [];
-			protected $template_html = [];
-			protected $template_allowed = [
+			protected int $template_end = 0;
+
+			/** @var array<int, array{string, null|string}> */
+			protected array $template_parameters = [];
+
+			/** @var array<int, string|array<int, string>> */
+			protected array $template_parameter_types = [];
+
+			/** @var array<int, string> */
+			protected array $template_html = [];
+
+			/** @var array<string, array<string, string|array<int, string>>> */
+			protected array $template_allowed = [
 
 						// Do not allow <script>, <style>, <link>, <object>, <embed> tags; or attributes that can include JS (e.g. style, onload, dynsrc)... although some can accept url(x) values
 
@@ -81,12 +89,18 @@
 
 				];
 
-			protected $parameters = [];
+			/** @var array<int, int|string|object> */
+			protected array $parameters = [];
 
 		//--------------------------------------------------
 		// Setup
 
-			public function __construct($template_html, $parameters = []) {
+			/**
+			 * @param literal-string $template_html
+			 * @param array<int, int|string|object> $parameters
+			 */
+
+			public function __construct(string $template_html, array $parameters = []) {
 
 				//--------------------------------------------------
 				// Check
@@ -160,6 +174,10 @@
 
 						$this->node_walk($doc);
 
+						/**
+						 * @var int $k
+						 * @var array{string, null|string} $p
+						 */
 						foreach ($this->template_parameters as $k => $p) {
 							$allowed_attributes = ($this->template_allowed[$p[0]] ?? NULL);
 							if ($allowed_attributes === NULL) {
@@ -182,7 +200,11 @@
 		//--------------------------------------------------
 		// Node walking
 
-			private function node_walk($parent, $root = true) {
+			/**
+			 * @param DOMNode $parent
+			 */
+
+			private function node_walk(object $parent, bool $root = true): void {
 				foreach ($parent->childNodes as $node) {
 					if ($node->nodeType === XML_TEXT_NODE) {
 						if (($node->wholeText ?? NULL) === '?') {
@@ -191,7 +213,8 @@
 					} else if (!array_key_exists($node->nodeName, $this->template_allowed) && $root !== true) { // Skip for the root node
 						throw new Exception('HTML Templates cannot use <' . $node->nodeName . '>');
 					} else {
-						if ($node->hasAttributes()) {
+						/** @psalm-suppress RedundantCondition - DOMElement check required for Psalm, attribute NULL check for PHPStan, neither consider $node->hasAttributes() */
+						if ($node instanceof DOMElement && $node->attributes !== NULL) {
 							foreach ($node->attributes as $attr) {
 								if (!array_key_exists($attr->nodeName, $this->template_allowed[$node->nodeName]) && !str_starts_with($attr->nodeName, 'data-')) {
 									throw new Exception('HTML Templates cannot use the "' . $attr->nodeName . '" attribute in <' . $node->nodeName . '>');
@@ -212,7 +235,11 @@
 		//--------------------------------------------------
 		// Output
 
-			public function html($parameters = NULL) {
+			/**
+			 * @param null|array<int, int|string|object> $parameters
+			 */
+
+			public function html($parameters = NULL): string {
 
 				if ($parameters === NULL) {
 					$parameters = $this->parameters;
@@ -294,23 +321,32 @@
 	}
 
 	class unsafe_value {
-		private $value = '';
-		function __construct($unsafe_value) {
+		private string $value = '';
+		function __construct(string $unsafe_value) {
 			$this->value = $unsafe_value;
 		}
-		function __toString() {
+		function __toString(): string {
 			return $this->value;
 		}
 	}
 
-	function ht($template_html, $parameters = []) {
+	/**
+	 * @param literal-string $template_html
+	 * @param array<int, int|string|object> $parameters
+	 */
+	function ht(string $template_html, array $parameters = []): html_template {
 		return new html_template($template_html, $parameters);
 	}
 
 	class url_data {
 
-		private $value = [];
+		/** @var array<string, string> */
+		private array $value = [];
 
+		/**
+		 * @param string|array<string, string> $value
+		 * @param literal-string $mime
+		 */
 		public function __construct($value, $mime = NULL) {
 			if (!is_array($value)) {
 				$value = ['path' => $value];
@@ -328,17 +364,17 @@
 			$this->value = $value;
 		}
 
-		public function mime_get() {
+		public function mime_get(): string {
 			return $this->value['mime'];
 		}
 
-		public function __toString() {
+		public function __toString(): string {
 			return 'data:' . $this->value['mime'] . ';base64,' . base64_encode($this->value['data']);
 		}
 
 	}
 
-	function http_mime_type($file_name) {
+	function http_mime_type(string $file_name): string {
 
 			// Do not use mime_content_type($file_name), it allows unsafe mime-types (e.g. text/html, application/javascript, etc)
 
@@ -359,7 +395,7 @@
 //--------------------------------------------------
 // Example 1
 
-	$url = sprintf($_GET['url'] ?? '/example/'); // Use sprintf() to mark as a non-literal string
+	$url = sprintf((string) ($_GET['url'] ?? '/example/')); // Use sprintf() to mark as a non-literal string
 
 	echo ht('<a href="?">My Profile</a>', [$url]);
 	echo "\n\n";
@@ -393,7 +429,7 @@
 //--------------------------------------------------
 // Example 3
 
-	$url = sprintf($_GET['url'] ?? '/example/'); // Use sprintf() to mark as a non-literal string
+	$url = sprintf((string) ($_GET['url'] ?? '/example/')); // Use sprintf() to mark as a non-literal string
 
 	echo ht('<a href="' . htmlspecialchars($url) . '">?</a>', [
 			'Link Text',
