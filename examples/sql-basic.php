@@ -132,14 +132,14 @@
 
 
 	$ids = [1, 2, 3];
-	if (count($ids) > 0) {
+	// if (count($ids) > 0) {
 
 		$where_sql .= ' AND
 			u.id IN (' . $db->placeholders(count($ids)) . ')';
 
 		$parameters = array_merge($parameters, $ids);
 
-	}
+	// }
 
 
 
@@ -238,7 +238,7 @@
 			t.type = ? AND
 			t.deleted IS NULL";
 
-	$parameters[] = ($_GET['type'] ?? 'admin');
+	$parameters[] = sprintf($_GET['type'] ?? 'admin'); // Using sprintf to mark as a non-literal string
 
 	$db->query($sql, $parameters, $aliases);
 

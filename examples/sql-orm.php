@@ -183,7 +183,7 @@
 	$conjunction = ($_GET['conjunction'] ?? 'OR');
 
 	$articles->find('all', [
-			$conjunction => [ // INSECURE
+			$conjunction => [
 				'category_id IS NULL',
 				'category_id' => $id,
 			],
