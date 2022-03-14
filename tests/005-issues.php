@@ -12,7 +12,9 @@
 
 	var_dump($sql, is_literal($sql));
 
-//--------------------------------------------------
+
+echo "\n--------------------------------------------------\n\n";
+
 
 	$b = 'BBB';
 
@@ -25,11 +27,42 @@
 	$sql = '';
 	foreach ($array as $part) {
 		if ($sql !== '') {
-			$sql .= ' / ';
+			$sql .= ' / '; // <-- Adding this literal is a problem?
 			var_dump([$sql, is_literal($sql)]);
 		}
 		$sql .= $part;
 		var_dump([$sql, is_literal($sql)]);
 	}
+
+
+echo "\n--------------------------------------------------\n\n";
+
+
+	class example {
+
+		private $config = [
+				'where_sql' => 'a = b',
+			];
+
+		function test() {
+
+			$sql = $this->config['where_sql']; // <-- Starting with a property value
+
+			// $sql = 'a = b';
+
+			var_dump([$sql, is_literal($sql)]);
+
+			$sql .= ' AND c = ?'; // <-- Causes this concatenating assignment to fail.
+
+			// $sql = $sql . ' AND b = ?';
+
+			var_dump([$sql, is_literal($sql)]);
+
+		}
+
+	}
+
+	$example = new example();
+	$example->test();
 
 ?>
