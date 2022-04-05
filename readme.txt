@@ -413,7 +413,7 @@ This allows you to "introspect classes, interfaces, functions, methods and exten
 
 **C++** can use a "[[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/others/cpp/index.cpp|consteval annotation]]".
 
-**Rust** can use a "[[https://github.com/craigfrancis/php-is-literal-rfc/tree/main/others/rust|procedural macro]]", to check the provided value is a literal at compile time (a bit complicated).
+**Rust** can use a "[[https://github.com/craigfrancis/php-is-literal-rfc/tree/main/others/rust|procedural macro]]", to check the provided value is a literal at compile-time (a bit complicated).
 
 **Java** can use a "[[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/others/java/src/main/java/com/example/isliteral/index.java|@CompileTimeConstant annotation]]" from [[https://errorprone.info/bugpattern/CompileTimeConstant|Error Prone]] to ensure method parameters can only use "compile-time constant expressions".
 
