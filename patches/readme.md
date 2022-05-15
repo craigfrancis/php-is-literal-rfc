@@ -1,18 +1,18 @@
 
 Apply the patch to the PHP source:
 
-	cd src/php-8.1.2
+	cd src/php-8.1.6
 
-    patch --dry-run -p1 < ../../patches/8.1.2-main.diff
+    patch --dry-run -p1 < ../../patches/8.1.6-main.diff
 
-    patch -p1 < ../../patches/8.1.2-main.diff
-    patch -p1 < ../../patches/8.1.2-tests.diff
+    patch -p1 < ../../patches/8.1.6-main.diff
+    patch -p1 < ../../patches/8.1.6-tests.diff
 
     php Zend/zend_vm_gen.php
 
 To create a new patch:
 
-	diff -ur ./php-8.1.2-orig/ ./php-8.1.2/ > ../patches/8.1.2-main.diff
+	diff -ur ./php-8.1.6-orig/ ./php-8.1.6/ > ../patches/8.1.6-main.diff
 
 	Edit the diff, so it's folders "a/" and "b/", and no timestamp.
 

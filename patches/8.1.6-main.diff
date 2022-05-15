@@ -1,0 +1,979 @@
+diff -ur a/Zend/zend_compile.c b/Zend/zend_compile.c
+--- a/Zend/zend_compile.c
++++ b/Zend/zend_compile.c
+@@ -845,10 +845,12 @@
+ /* }}} */
+ 
+ ZEND_API zend_string *zend_create_member_string(zend_string *class_name, zend_string *member_name) {
+-	return zend_string_concat3(
++	zend_string* string = zend_string_concat3(
+ 		ZSTR_VAL(class_name), ZSTR_LEN(class_name),
+ 		"::", sizeof("::") - 1,
+ 		ZSTR_VAL(member_name), ZSTR_LEN(member_name));
++	ZSTR_SET_LITERAL_FAST(string);
++	return string;
+ }
+ 
+ static zend_string *zend_concat_names(char *name1, size_t name1_len, char *name2, size_t name2_len) {
+@@ -858,7 +860,11 @@
+ static zend_string *zend_prefix_with_ns(zend_string *name) {
+ 	if (FC(current_namespace)) {
+ 		zend_string *ns = FC(current_namespace);
+-		return zend_concat_names(ZSTR_VAL(ns), ZSTR_LEN(ns), ZSTR_VAL(name), ZSTR_LEN(name));
++		zend_string *prefixed =
++			zend_concat_names(ZSTR_VAL(ns), ZSTR_LEN(ns), ZSTR_VAL(name), ZSTR_LEN(name));
++
++		ZSTR_SET_LITERAL_FAST(prefixed);
++		return prefixed;
+ 	} else {
+ 		return zend_string_copy(name);
+ 	}
+@@ -3845,7 +3851,21 @@
+ 	opline = zend_emit_op_tmp(result, ZEND_TYPE_CHECK, &arg_node, NULL);
+ 	opline->extended_value = (1 << IS_FALSE | 1 << IS_TRUE | 1 << IS_DOUBLE | 1 << IS_LONG | 1 << IS_STRING);
+ 	return SUCCESS;
+-}
++} /* }}} */
++
++static zend_result zend_compile_func_is_literal(znode *result, zend_ast_list *args) /* {{{ */
++{
++	znode arg_node;
++
++	if (args->children != 1) {
++		return FAILURE;
++	}
++
++	zend_compile_expr(&arg_node, args->child[0]);
++	zend_emit_op(result, ZEND_LITERAL_CHECK, &arg_node, NULL);
++
++	return SUCCESS;
++} /* }}} */
+ 
+ static zend_result zend_compile_func_cast(znode *result, zend_ast_list *args, uint32_t type) /* {{{ */
+ {
+@@ -4376,6 +4396,8 @@
+ 		return zend_compile_func_typecheck(result, args, IS_RESOURCE);
+ 	} else if (zend_string_equals_literal(lcname, "is_scalar")) {
+ 		return zend_compile_func_is_scalar(result, args);
++	} else if (zend_string_equals_literal(lcname, "is_literal")) {
++		return zend_compile_func_is_literal(result, args);
+ 	} else if (zend_string_equals_literal(lcname, "boolval")) {
+ 		return zend_compile_func_cast(result, args, _IS_BOOL);
+ 	} else if (zend_string_equals_literal(lcname, "intval")) {
+diff -ur a/Zend/zend_language_scanner.l b/Zend/zend_language_scanner.l
+--- a/Zend/zend_language_scanner.l
++++ b/Zend/zend_language_scanner.l
+@@ -760,6 +760,15 @@
+ 	RESET_DOC_COMMENT();
+ }
+ 
++zend_ast* zend_get_scanned_string_ast(zval *zendlval, uint32_t start_line) {
++    if (Z_TYPE_P(zendlval) == IS_STRING && Z_STRLEN_P(zendlval) > 1) {
++        zend_string *string = 
++            Z_STR_P(zendlval);
++
++        GC_TYPE_INFO(string) |= IS_STR_LITERAL;
++    }
++    return zend_ast_create_zval_with_lineno(zendlval, start_line);
++}
+ 
+ ZEND_API size_t zend_get_scanned_file_offset(void)
+ {
+@@ -895,7 +904,7 @@
+ 		ZVAL_STRINGL(zendlval, s, sz); \
+ 		efree(s); \
+ 	} else if (yyleng == 1) { \
+-		ZVAL_INTERNED_STR(zendlval, ZSTR_CHAR((zend_uchar)*(yytext))); \
++		ZVAL_INTERNED_STR(zendlval, ZSTR_LITERAL_CHAR((zend_uchar)*(yytext))); \
+ 	} else { \
+ 		ZVAL_STRINGL(zendlval, yytext, yyleng); \
+ 	}
+@@ -907,13 +916,13 @@
+ 
+ 	if (len <= 1) {
+ 		if (len < 1) {
+-			ZVAL_EMPTY_STRING(zendlval);
++			ZVAL_INTERNED_STR(zendlval, ZSTR_EMPTY_LITERAL_ALLOC());
+ 		} else {
+ 			zend_uchar c = (zend_uchar)*str;
+ 			if (c == '\n' || c == '\r') {
+ 				CG(zend_lineno)++;
+ 			}
+-			ZVAL_INTERNED_STR(zendlval, ZSTR_CHAR(c));
++			ZVAL_INTERNED_STR(zendlval, ZSTR_LITERAL_CHAR(c));
+ 		}
+ 		goto skip_escape_conversion;
+ 	}
+@@ -1121,6 +1130,14 @@
+ 		ZVAL_STRINGL(zendlval, (char *) str, sz);
+ 		efree(str);
+ 	}
++
++	if (UNEXPECTED(Z_STRLEN_P(zendlval) == 1)) {
++		zend_uchar c = (zend_uchar)*Z_STRVAL_P(zendlval);
++
++		zend_string_release(Z_STR_P(zendlval));
++
++		ZVAL_INTERNED_STR(zendlval, ZSTR_LITERAL_CHAR(c));
++	}
+ 	return SUCCESS;
+ }
+ 
+@@ -2140,7 +2157,7 @@
+ 
+ <ST_VAR_OFFSET>{LNUM}|{HNUM}|{BNUM}|{ONUM} { /* Offset must be treated as a string */
+ 	if (yyleng == 1) {
+-		ZVAL_INTERNED_STR(zendlval, ZSTR_CHAR((zend_uchar)*(yytext)));
++		ZVAL_INTERNED_STR(zendlval, ZSTR_LITERAL_CHAR((zend_uchar)*(yytext)));
+ 	} else {
+ 		ZVAL_STRINGL(zendlval, yytext, yyleng);
+ 	}
+@@ -2295,7 +2312,7 @@
+ 			yyless(readsize);
+ 		}
+ 	} else if (yyleng == 1) {
+-		ZVAL_INTERNED_STR(zendlval, ZSTR_CHAR((zend_uchar)*yytext));
++		ZVAL_INTERNED_STR(zendlval, ZSTR_LITERAL_CHAR((zend_uchar)*yytext));
+ 	} else {
+ 		ZVAL_STRINGL(zendlval, yytext, yyleng);
+ 	}
+@@ -2470,13 +2487,13 @@
+ 
+ 	if (yyleng-bprefix-2 <= 1) {
+ 		if (yyleng-bprefix-2 < 1) {
+-			ZVAL_EMPTY_STRING(zendlval);
++			ZVAL_INTERNED_STR(zendlval, ZSTR_EMPTY_LITERAL_ALLOC());
+ 		} else {
+ 			zend_uchar c = (zend_uchar)*(yytext+bprefix+1);
+ 			if (c == '\n' || c == '\r') {
+ 				CG(zend_lineno)++;
+ 			}
+-			ZVAL_INTERNED_STR(zendlval, ZSTR_CHAR(c));
++			ZVAL_INTERNED_STR(zendlval, ZSTR_LITERAL_CHAR(c));
+ 		}
+ 		goto skip_escape_conversion;
+ 	}
+@@ -2534,6 +2551,15 @@
+ 		zend_string_release_ex(Z_STR_P(zendlval), 0);
+ 		ZVAL_STR(zendlval, new_str);
+ 	}
++
++	if (UNEXPECTED(Z_STRLEN_P(zendlval) == 1)) {
++		zend_uchar c = (zend_uchar)*Z_STRVAL_P(zendlval);
++
++		zend_string_release(Z_STR_P(zendlval));
++
++		ZVAL_INTERNED_STR(zendlval, ZSTR_LITERAL_CHAR(c));
++	}
++
+ 	RETURN_TOKEN_WITH_VAL(T_CONSTANT_ENCAPSED_STRING);
+ }
+ 
+@@ -3100,7 +3126,7 @@
+ emit_token_with_val:
+ 	if (PARSER_MODE()) {
+ 		ZEND_ASSERT(Z_TYPE_P(zendlval) != IS_UNDEF);
+-		elem->ast = zend_ast_create_zval_with_lineno(zendlval, start_line);
++		elem->ast = zend_get_scanned_string_ast(zendlval, start_line);
+ 	}
+ 
+ emit_token:
+diff -ur a/Zend/zend_operators.c b/Zend/zend_operators.c
+--- a/Zend/zend_operators.c
++++ b/Zend/zend_operators.c
+@@ -1841,10 +1841,15 @@
+ {
+     zval *orig_op1 = op1;
+ 	zval op1_copy, op2_copy;
++	bool literal = false;
+ 
+ 	ZVAL_UNDEF(&op1_copy);
+ 	ZVAL_UNDEF(&op2_copy);
+ 
++	if (UNEXPECTED(Z_IS_LITERAL_P(op1) && Z_IS_LITERAL_P(op2))) {
++	    literal = true;
++	}
++
+ 	do {
+ 	 	if (UNEXPECTED(Z_TYPE_P(op1) != IS_STRING)) {
+ 	 		if (Z_ISREF_P(op1)) {
+@@ -1921,12 +1926,18 @@
+ 		if (result == op1 && Z_REFCOUNTED_P(result)) {
+ 			/* special case, perform operations on result */
+ 			result_str = zend_string_extend(Z_STR_P(result), result_len, 0);
++			if (UNEXPECTED(!literal && ZSTR_IS_LITERAL(result_str))) {
++			    ZSTR_UNSET_LITERAL(&result_str);
++			}
+ 		} else {
+ 			result_str = zend_string_alloc(result_len, 0);
+ 			memcpy(ZSTR_VAL(result_str), Z_STRVAL_P(op1), op1_len);
+ 			if (result == orig_op1) {
+ 				i_zval_ptr_dtor(result);
+ 			}
++			if (UNEXPECTED(literal)) {
++			    ZSTR_SET_LITERAL_FAST(result_str);
++			}
+ 		}
+ 
+ 		/* This has to happen first to account for the cases where result == op1 == op2 and
+diff -ur a/Zend/zend_string.c b/Zend/zend_string.c
+--- a/Zend/zend_string.c
++++ b/Zend/zend_string.c
+@@ -45,7 +45,9 @@
+ static zend_string_init_existing_interned_func_t interned_string_init_existing_request_handler = zend_string_init_existing_interned_request;
+ 
+ ZEND_API zend_string  *zend_empty_string = NULL;
++ZEND_API zend_string  *zend_empty_literal = NULL;
+ ZEND_API zend_string  *zend_one_char_string[256];
++ZEND_API zend_string  *zend_one_char_literal[256];
+ ZEND_API zend_string **zend_known_strings = NULL;
+ 
+ ZEND_API zend_ulong ZEND_FASTCALL zend_string_hash_func(zend_string *str)
+@@ -115,6 +117,39 @@
+ 		str = zend_string_init(known_strings[i], strlen(known_strings[i]), 1);
+ 		zend_known_strings[i] = zend_new_interned_string_permanent(str);
+ 	}
++
++	/* literal chars */
++	for (i = 0; i < 256; i++) {
++		zend_string *string = pemalloc(_ZSTR_STRUCT_SIZE(1), 1);
++
++		if (!string) {
++			break;
++		}
++
++		ZSTR_LEN(string)	= 1;
++		ZSTR_VAL(string)[0] = i;
++		ZSTR_VAL(string)[1] = 0;
++		GC_SET_REFCOUNT(string, 2);
++		GC_TYPE_INFO(string) = 
++			GC_STRING | IS_STR_LITERAL | (IS_STR_INTERNED|IS_STR_PERMANENT) << GC_FLAGS_SHIFT;
++		zend_string_hash_func(string);		
++		zend_one_char_literal[i] = string;
++	}
++
++	/* literal empty */
++	zend_string *empty = pemalloc(_ZSTR_STRUCT_SIZE(0), 1);
++	
++	if (!empty) {
++		return;
++	}
++
++	ZSTR_VAL(empty)[0] = 0;
++	ZSTR_LEN(empty) = 0;
++	GC_SET_REFCOUNT(empty, 2);
++	GC_TYPE_INFO(empty) = 
++		GC_STRING | IS_STR_LITERAL | (IS_STR_INTERNED|IS_STR_PERMANENT) << GC_FLAGS_SHIFT;
++	zend_string_hash_func(empty);
++	zend_empty_literal = empty;
+ }
+ 
+ ZEND_API void zend_interned_strings_dtor(void)
+@@ -123,6 +158,14 @@
+ 
+ 	free(zend_known_strings);
+ 	zend_known_strings = NULL;
++
++	free(zend_empty_literal);
++	zend_empty_literal = NULL;
++
++	uint32_t i;
++	for (i = 0; i < 256; i++) {
++		pefree(zend_one_char_literal[i], 1);
++	}
+ }
+ 
+ static zend_always_inline zend_string *zend_interned_string_ht_lookup_ex(zend_ulong h, const char *str, size_t size, HashTable *interned_strings)
+@@ -135,7 +178,7 @@
+ 	idx = HT_HASH(interned_strings, nIndex);
+ 	while (idx != HT_INVALID_IDX) {
+ 		p = HT_HASH_TO_BUCKET(interned_strings, idx);
+-		if ((p->h == h) && (ZSTR_LEN(p->key) == size)) {
++		if ((p->h == h) && (ZSTR_LEN(p->key) == size) && !ZSTR_IS_LITERAL(p->key)) {
+ 			if (!memcmp(ZSTR_VAL(p->key), str, size)) {
+ 				return p->key;
+ 			}
+@@ -146,7 +189,7 @@
+ 	return NULL;
+ }
+ 
+-static zend_always_inline zend_string *zend_interned_string_ht_lookup(zend_string *str, HashTable *interned_strings)
++static zend_always_inline Bucket *zend_interned_string_ht_bucket(zend_string *str, HashTable *interned_strings)
+ {
+ 	zend_ulong h = ZSTR_H(str);
+ 	uint32_t nIndex;
+@@ -157,8 +200,9 @@
+ 	idx = HT_HASH(interned_strings, nIndex);
+ 	while (idx != HT_INVALID_IDX) {
+ 		p = HT_HASH_TO_BUCKET(interned_strings, idx);
+-		if ((p->h == h) && zend_string_equal_content(p->key, str)) {
+-			return p->key;
++		if ((p->h == h) && 
++			(ZSTR_IS_LITERAL(p->key) == ZSTR_IS_LITERAL(str)) && zend_string_equal_content(p->key, str)) {
++			return p;
+ 		}
+ 		idx = Z_NEXT(p->val);
+ 	}
+@@ -166,20 +210,103 @@
+ 	return NULL;
+ }
+ 
++static zend_always_inline zend_string *zend_interned_string_ht_lookup(zend_string *str, HashTable *interned_strings)
++{
++	Bucket *p = zend_interned_string_ht_bucket(str, interned_strings);
++
++	if (p) {
++		return p->key;
++	}
++
++	return NULL;
++}
++
++static zend_always_inline void zend_interned_string_ht_resize(HashTable *ht)
++{
++	if (ht->nNumUsed > ht->nNumOfElements + (ht->nNumOfElements >> 5)) {
++		zend_hash_rehash(ht);
++	} else if (ht->nTableSize < HT_MAX_SIZE) {
++		void *new_data, *old_data = HT_GET_DATA_ADDR(ht);
++		uint32_t nSize = ht->nTableSize + ht->nTableSize;
++		Bucket *old_buckets = ht->arData;
++
++		ht->nTableSize = nSize;
++		new_data = pemalloc(HT_SIZE_EX(nSize, HT_SIZE_TO_MASK(nSize)), GC_FLAGS(ht) & IS_ARRAY_PERSISTENT);
++		ht->nTableMask = HT_SIZE_TO_MASK(ht->nTableSize);
++		HT_SET_DATA_ADDR(ht, new_data);
++		memcpy(ht->arData, old_buckets, sizeof(Bucket) * ht->nNumUsed);
++		pefree(old_data, GC_FLAGS(ht) & IS_ARRAY_PERSISTENT);
++		zend_hash_rehash(ht);
++	} else {
++		zend_error_noreturn(E_ERROR, "Possible integer overflow in memory allocation (%u * %zu + %zu)", ht->nTableSize * 2, sizeof(Bucket) + sizeof(uint32_t), sizeof(Bucket));
++	}
++}
++
++static zend_always_inline zend_string* zend_interned_string_ht_add(zend_string *key, zval *pData, HashTable *interned_strings)
++{
++	zend_ulong h;
++	uint32_t nIndex;
++	uint32_t idx;
++	Bucket *p, *arData;
++
++	ZEND_ASSERT(ZSTR_IS_INTERNED(key));
++
++	if (UNEXPECTED(HT_FLAGS(interned_strings) & (HASH_FLAG_UNINITIALIZED|HASH_FLAG_PACKED))) {
++		if (EXPECTED(HT_FLAGS(interned_strings) & HASH_FLAG_UNINITIALIZED)) {
++			zend_hash_real_init_mixed(interned_strings);
++			goto add_to_hash;
++		} else {
++			zend_hash_packed_to_hash(interned_strings);
++		}
++	} else {
++		p = zend_interned_string_ht_bucket(key, interned_strings);
++
++		if (p) {
++			return p->key;
++		}
++	}
++
++	if (interned_strings->nNumUsed >= interned_strings->nTableSize) {
++		zend_interned_string_ht_resize(interned_strings);
++	}
++
++add_to_hash:
++	idx = interned_strings->nNumUsed++;
++	interned_strings->nNumOfElements++;
++	arData = interned_strings->arData;
++	p = arData + idx;
++	p->key = key;
++	p->h = h = ZSTR_H(key);
++	nIndex = h | interned_strings->nTableMask;
++	Z_NEXT(p->val) = HT_HASH_EX(arData, nIndex);
++	HT_HASH_EX(arData, nIndex) = HT_IDX_TO_HASH(idx);
++
++	ZVAL_COPY_VALUE(&p->val, pData);
++	return p->key;
++}
++
+ /* This function might be not thread safe at least because it would update the
+    hash val in the passed string. Be sure it is called in the appropriate context. */
+ static zend_always_inline zend_string *zend_add_interned_string(zend_string *str, HashTable *interned_strings, uint32_t flags)
+ {
+ 	zval val;
++	zend_string *ret;
++	uint32_t refs = GC_REFCOUNT(str);
+ 
+ 	GC_SET_REFCOUNT(str, 1);
+ 	GC_ADD_FLAGS(str, IS_STR_INTERNED | flags);
+ 
+ 	ZVAL_INTERNED_STR(&val, str);
+ 
+-	zend_hash_add_new(interned_strings, str, &val);
++	ret = zend_interned_string_ht_add(str, &val, interned_strings);
++	
++	if (UNEXPECTED(ret != str)) {
++		GC_DEL_FLAGS(str, IS_STR_INTERNED | flags);
++		GC_SET_REFCOUNT(str, refs);
++		zend_string_release(str);
++	}
+ 
+-	return str;
++	return ret;
+ }
+ 
+ ZEND_API zend_string* ZEND_FASTCALL zend_interned_string_find_permanent(zend_string *str)
+@@ -237,6 +364,8 @@
+ 		return ret;
+ 	}
+ 
++	bool literal = GC_TYPE_INFO(str) & IS_STR_LITERAL;
++
+ 	/* Create a short living interned, freed after the request. */
+ #if ZEND_RC_DEBUG
+ 	if (zend_rc_debug) {
+@@ -253,6 +382,10 @@
+ 	}
+ 
+ 	ret = zend_add_interned_string(str, &CG(interned_strings), 0);
++	
++	if (UNEXPECTED(literal)) {
++		GC_TYPE_INFO(ret) |= IS_STR_LITERAL;
++	}
+ 
+ 	return ret;
+ }
+diff -ur a/Zend/zend_string.h b/Zend/zend_string.h
+--- a/Zend/zend_string.h
++++ b/Zend/zend_string.h
+@@ -59,6 +59,9 @@
+ ZEND_API extern zend_string  *zend_one_char_string[256];
+ ZEND_API extern zend_string **zend_known_strings;
+ 
++ZEND_API extern zend_string  *zend_one_char_literal[256];
++ZEND_API extern zend_string  *zend_empty_literal;
++
+ END_EXTERN_C()
+ 
+ /* Shortcuts */
+@@ -82,7 +85,9 @@
+ #define ZSTR_IS_INTERNED(s)					(GC_FLAGS(s) & IS_STR_INTERNED)
+ 
+ #define ZSTR_EMPTY_ALLOC() zend_empty_string
++#define ZSTR_EMPTY_LITERAL_ALLOC() zend_empty_literal
+ #define ZSTR_CHAR(c) zend_one_char_string[c]
++#define ZSTR_LITERAL_CHAR(c) zend_one_char_literal[c]
+ #define ZSTR_KNOWN(idx) zend_known_strings[idx]
+ 
+ #define _ZSTR_HEADER_SIZE XtOffsetOf(zend_string, val)
+@@ -339,6 +344,53 @@
+ 	}
+ }
+ 
++#define ZSTR_IS_LITERAL(s)	 (GC_TYPE_INFO(s) & IS_STR_LITERAL)
++#define ZSTR_IS_LITERAL_CHAR(s) (ZSTR_IS_LITERAL(s) && (ZSTR_LEN(s) <= 1))
++
++static zend_always_inline zend_string* zend_string_set_literal(zend_string *s) {
++	if (UNEXPECTED(ZSTR_IS_LITERAL(s))) {
++		return s;
++	}
++
++	if (EXPECTED(GC_REFCOUNT(s) == 1 && !ZSTR_IS_INTERNED(s))) {
++		GC_TYPE_INFO(s) |= IS_STR_LITERAL;
++		return s;
++	}
++
++	zend_string *literal = zend_string_separate(s, 0);
++
++	GC_TYPE_INFO(literal) |= IS_STR_LITERAL;
++
++	return literal;
++}
++
++static zend_always_inline zend_string* zend_string_unset_literal(zend_string *s) {
++	if (UNEXPECTED(!ZSTR_IS_LITERAL(s))) {
++		return s;
++	}
++
++	if (EXPECTED(GC_REFCOUNT(s) == 1 && !ZSTR_IS_INTERNED(s))) {
++		GC_TYPE_INFO(s) &= ~IS_STR_LITERAL;
++		return s;
++	}
++
++	zend_string *literal = zend_string_separate(s, 0);
++
++	GC_TYPE_INFO(literal) &= ~IS_STR_LITERAL;
++
++	return literal;
++}
++
++static zend_always_inline void zend_string_set_literal_fast(zend_string *s) {
++	ZEND_ASSERT(GC_REFCOUNT(s) == 1 && !ZSTR_IS_INTERNED(s));
++
++	GC_TYPE_INFO(s) |= IS_STR_LITERAL;
++}
++
++#define ZSTR_SET_LITERAL(s)    *(s) = zend_string_set_literal(*(s))
++#define ZSTR_SET_LITERAL_FAST  zend_string_set_literal_fast
++#define ZSTR_UNSET_LITERAL(s)  *(s) = zend_string_unset_literal(*(s))
++
+ #if defined(__GNUC__) && (defined(__i386__) || (defined(__x86_64__) && !defined(__ILP32__)))
+ BEGIN_EXTERN_C()
+ ZEND_API bool ZEND_FASTCALL zend_string_equal_val(zend_string *s1, zend_string *s2);
+diff -ur a/Zend/zend_types.h b/Zend/zend_types.h
+--- a/Zend/zend_types.h
++++ b/Zend/zend_types.h
+@@ -700,6 +700,7 @@
+ #define IS_STR_PERSISTENT			GC_PERSISTENT /* allocated using malloc */
+ #define IS_STR_PERMANENT        	(1<<8)        /* relives request boundary */
+ #define IS_STR_VALID_UTF8           (1<<9)        /* valid UTF-8 according to PCRE */
++#define IS_STR_LITERAL              (1<<10)
+ 
+ /* array flags */
+ #define IS_ARRAY_IMMUTABLE			GC_IMMUTABLE
+@@ -762,6 +763,9 @@
+ #define Z_PROTECT_RECURSION_P(zv)   Z_PROTECT_RECURSION(*(zv))
+ #define Z_UNPROTECT_RECURSION_P(zv) Z_UNPROTECT_RECURSION(*(zv))
+ 
++#define Z_IS_LITERAL(zval)          (Z_TYPE(zval) == IS_STRING && ZSTR_IS_LITERAL(Z_STR(zval)))
++#define Z_IS_LITERAL_P(zv)          Z_IS_LITERAL(*(zv))
++
+ /* All data types < IS_STRING have their constructor/destructors skipped */
+ #define Z_CONSTANT(zval)			(Z_TYPE(zval) == IS_CONSTANT_AST)
+ #define Z_CONSTANT_P(zval_p)		Z_CONSTANT(*(zval_p))
+diff -ur a/Zend/zend_vm_def.h b/Zend/zend_vm_def.h
+--- a/Zend/zend_vm_def.h
++++ b/Zend/zend_vm_def.h
+@@ -411,6 +411,9 @@
+ 				zend_error_noreturn(E_ERROR, "Integer overflow in memory allocation");
+ 			}
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str) && !ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (OP2_TYPE & (IS_TMP_VAR|IS_VAR)) {
+@@ -418,6 +421,9 @@
+ 			}
+ 		} else {
+ 			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_SET_LITERAL_FAST(str);
++			}
+ 			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -3177,6 +3183,9 @@
+ 		    size_t len = ZSTR_LEN(op1_str);
+ 
+ 			str = zend_string_extend(op1_str, len + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(str) && !ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_UNSET_LITERAL(&str);
++			}
+ 			memcpy(ZSTR_VAL(str) + len, ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+ 			if (OP2_TYPE & (IS_TMP_VAR|IS_VAR)) {
+@@ -3184,6 +3193,9 @@
+ 			}
+ 		} else {
+ 			str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++			if (ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str)) {
++				ZSTR_SET_LITERAL_FAST(str);
++			}
+ 			memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 			ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -3244,6 +3256,9 @@
+ 			}
+ 		}
+ 		str = zend_string_alloc(ZSTR_LEN(op1_str) + ZSTR_LEN(op2_str), 0);
++		if (UNEXPECTED(ZSTR_IS_LITERAL(op1_str) && ZSTR_IS_LITERAL(op2_str))) {
++			ZSTR_SET_LITERAL_FAST(str);
++		}
+ 		memcpy(ZSTR_VAL(str), ZSTR_VAL(op1_str), ZSTR_LEN(op1_str));
+ 		memcpy(ZSTR_VAL(str) + ZSTR_LEN(op1_str), ZSTR_VAL(op2_str), ZSTR_LEN(op2_str)+1);
+ 		ZVAL_NEW_STR(EX_VAR(opline->result.var), str);
+@@ -3254,6 +3269,7 @@
+ 			zend_string_release_ex(op2_str, 0);
+ 		}
+ 	} while (0);
++
+ 	FREE_OP1();
+ 	FREE_OP2();
+ 	ZEND_VM_NEXT_OPCODE_CHECK_EXCEPTION();
+@@ -3332,11 +3348,12 @@
+ ZEND_VM_HANDLER(56, ZEND_ROPE_END, TMP, CONST|TMPVAR|CV, NUM)
+ {
+ 	USE_OPLINE
+-	zend_string **rope;
+-	zval *var, *ret;
++	zend_string **rope, *result;
++	zval *var;
+ 	uint32_t i;
+ 	size_t len = 0;
+ 	char *target;
++	bool literal = true;
+ 
+ 	rope = (zend_string**)EX_VAR(opline->op1.var);
+ 	if (OP2_TYPE == IS_CONST) {
+@@ -3372,16 +3389,22 @@
+ 	for (i = 0; i <= opline->extended_value; i++) {
+ 		len += ZSTR_LEN(rope[i]);
+ 	}
+-	ret = EX_VAR(opline->result.var);
+-	ZVAL_STR(ret, zend_string_alloc(len, 0));
+-	target = Z_STRVAL_P(ret);
++
++	result = zend_string_alloc(len, 0);
++	target = ZSTR_VAL(result);
+ 	for (i = 0; i <= opline->extended_value; i++) {
++		if (literal && !ZSTR_IS_LITERAL(rope[i])) {
++			literal = false;
++		}
+ 		memcpy(target, ZSTR_VAL(rope[i]), ZSTR_LEN(rope[i]));
+ 		target += ZSTR_LEN(rope[i]);
+ 		zend_string_release_ex(rope[i], 0);
+ 	}
+ 	*target = '\0';
+-
++	if (literal) {
++		ZSTR_SET_LITERAL_FAST(result);
++	}
++	ZVAL_STR(EX_VAR(opline->result.var), result);
+ 	ZEND_VM_NEXT_OPCODE();
+ }
+ 
+@@ -4290,6 +4313,18 @@
+ 	HANDLE_EXCEPTION();
+ }
+ 
++ZEND_VM_HOT_HANDLER(203, ZEND_LITERAL_CHECK, ANY, UNUSED)
++{
++	USE_OPLINE
++
++	zval *zv = GET_OP1_ZVAL_PTR_UNDEF(BP_VAR_R);
++
++	ZVAL_BOOL(EX_VAR(opline->result.var), Z_IS_LITERAL_P(zv));
++
++	FREE_OP1();
++	ZEND_VM_NEXT_OPCODE();
++}
++
+ ZEND_VM_INLINE_HANDLER(62, ZEND_RETURN, CONST|TMP|VAR|CV, ANY, SPEC(OBSERVER))
+ {
+ 	USE_OPLINE
+diff -ur a/Zend/zend_vm_opcodes.c b/Zend/zend_vm_opcodes.c
+--- a/Zend/zend_vm_opcodes.c
++++ b/Zend/zend_vm_opcodes.c
+@@ -22,7 +22,7 @@
+ #include <zend.h>
+ #include <zend_vm_opcodes.h>
+ 
+-static const char *zend_vm_opcodes_names[203] = {
++static const char *zend_vm_opcodes_names[204] = {
+ 	"ZEND_NOP",
+ 	"ZEND_ADD",
+ 	"ZEND_SUB",
+@@ -226,9 +226,10 @@
+ 	"ZEND_FETCH_GLOBALS",
+ 	"ZEND_VERIFY_NEVER_TYPE",
+ 	"ZEND_CALLABLE_CONVERT",
++	"ZEND_LITERAL_CHECK",
+ };
+ 
+-static uint32_t zend_vm_opcodes_flags[203] = {
++static uint32_t zend_vm_opcodes_flags[204] = {
+ 	0x00000000,
+ 	0x00000b0b,
+ 	0x00000b0b,
+@@ -432,6 +433,7 @@
+ 	0x00000101,
+ 	0x00000101,
+ 	0x00000101,
++	0x00000100,
+ };
+ 
+ ZEND_API const char* ZEND_FASTCALL zend_get_opcode_name(zend_uchar opcode) {
+diff -ur a/Zend/zend_vm_opcodes.h b/Zend/zend_vm_opcodes.h
+--- a/Zend/zend_vm_opcodes.h
++++ b/Zend/zend_vm_opcodes.h
+@@ -286,7 +286,8 @@
+ #define ZEND_FETCH_GLOBALS              200
+ #define ZEND_VERIFY_NEVER_TYPE          201
+ #define ZEND_CALLABLE_CONVERT           202
++#define ZEND_LITERAL_CHECK              203
+ 
+-#define ZEND_VM_LAST_OPCODE             202
++#define ZEND_VM_LAST_OPCODE             203
+ 
+ #endif
+diff -ur a/ext/opcache/ZendAccelerator.c b/ext/opcache/ZendAccelerator.c
+--- a/ext/opcache/ZendAccelerator.c
++++ b/ext/opcache/ZendAccelerator.c
+@@ -436,7 +436,7 @@
+ }
+ 
+ static zend_always_inline zend_string *accel_find_interned_string(zend_string *str)
+-{
++{   
+ 	zend_ulong   h;
+ 	uint32_t     pos;
+ 	zend_string *s;
+@@ -460,7 +460,8 @@
+ 	if (EXPECTED(pos != STRTAB_INVALID_POS)) {
+ 		do {
+ 			s = STRTAB_POS_TO_STR(&ZCSG(interned_strings), pos);
+-			if (EXPECTED(ZSTR_H(s) == h) && zend_string_equal_content(s, str)) {
++			if (EXPECTED(ZSTR_H(s) == h) &&
++				(ZSTR_IS_LITERAL(s) == ZSTR_IS_LITERAL(str)) && zend_string_equal_content(s, str)) {
+ 				return s;
+ 			}
+ 			pos = STRTAB_COLLISION(s);
+@@ -493,7 +494,8 @@
+ 	if (EXPECTED(pos != STRTAB_INVALID_POS)) {
+ 		do {
+ 			s = STRTAB_POS_TO_STR(&ZCSG(interned_strings), pos);
+-			if (EXPECTED(ZSTR_H(s) == h) && zend_string_equal_content(s, str)) {
++			if (EXPECTED(ZSTR_H(s) == h) &&
++				(ZSTR_IS_LITERAL(s) == ZSTR_IS_LITERAL(str)) && zend_string_equal_content(s, str)) {
+ 				goto finish;
+ 			}
+ 			pos = STRTAB_COLLISION(s);
+@@ -514,6 +516,9 @@
+ 	*hash_slot = STRTAB_STR_TO_POS(&ZCSG(interned_strings), s);
+ 	GC_SET_REFCOUNT(s, 2);
+ 	GC_TYPE_INFO(s) = GC_STRING | ((IS_STR_INTERNED | IS_STR_PERMANENT) << GC_FLAGS_SHIFT);
++	if (ZSTR_IS_LITERAL(str)) {
++		GC_TYPE_INFO(s) |= IS_STR_LITERAL;
++	}
+ 	ZSTR_H(s) = h;
+ 	ZSTR_LEN(s) = ZSTR_LEN(str);
+ 	memcpy(ZSTR_VAL(s), ZSTR_VAL(str), ZSTR_LEN(s) + 1);
+@@ -1382,6 +1387,9 @@
+ 			ZSTR_H(new_key) = ZSTR_H(key);
+ 			ZSTR_LEN(new_key) = ZSTR_LEN(key);
+ 			memcpy(ZSTR_VAL(new_key), ZSTR_VAL(key), ZSTR_LEN(new_key) + 1);
++			if (ZSTR_IS_LITERAL(key)) {
++			    GC_TYPE_INFO(new_key) |= IS_STR_LITERAL;
++			}
+ 		}
+ 	}
+ 	return new_key;
+diff -ur a/ext/opcache/jit/zend_jit_helpers.c b/ext/opcache/jit/zend_jit_helpers.c
+--- a/ext/opcache/jit/zend_jit_helpers.c
++++ b/ext/opcache/jit/zend_jit_helpers.c
+@@ -1632,12 +1632,17 @@
+ 	size_t op2_len = Z_STRLEN_P(op2);
+ 	size_t result_len = op1_len + op2_len;
+ 	zend_string *result_str;
++	bool literal = false;
+ 
+ 	if (UNEXPECTED(op1_len > SIZE_MAX - op2_len)) {
+ 		zend_throw_error(NULL, "String size overflow");
+ 		return;
+ 	}
+ 
++	if (UNEXPECTED(ZSTR_IS_LITERAL(Z_STR_P(op1)) && ZSTR_IS_LITERAL(Z_STR_P(op2)))) {
++		literal = true;
++	}
++
+ 	do {
+ 		if (Z_REFCOUNTED_P(op1)) {
+ 			if (GC_REFCOUNT(Z_STR_P(op1)) == 1) {
+@@ -1647,12 +1652,18 @@
+ 				if (UNEXPECTED(Z_STR_P(op1) == Z_STR_P(op2))) {
+ 					ZVAL_NEW_STR(op2, result_str);
+ 				}
++				if (EXPECTED(!literal && ZSTR_IS_LITERAL(result_str))) {
++				    ZSTR_UNSET_LITERAL(&result_str);
++				}
+ 				break;
+ 			}
+ 			GC_DELREF(Z_STR_P(op1));
+ 		}
+ 		result_str = zend_string_alloc(result_len, 0);
+ 		memcpy(ZSTR_VAL(result_str), Z_STRVAL_P(op1), op1_len);
++		if (UNEXPECTED(literal)) {
++		    ZSTR_SET_LITERAL_FAST(result_str);
++		}
+ 	} while(0);
+ 
+ 	ZVAL_NEW_STR(op1, result_str);
+@@ -1674,6 +1685,9 @@
+ 
+ 	result_str = zend_string_alloc(result_len, 0);
+ 	memcpy(ZSTR_VAL(result_str), Z_STRVAL_P(op1), op1_len);
++	if (UNEXPECTED(ZSTR_IS_LITERAL(Z_STR_P(op1)) && ZSTR_IS_LITERAL(Z_STR_P(op2)))) {
++		ZSTR_SET_LITERAL_FAST(result_str);
++	}
+ 
+ 	ZVAL_NEW_STR(result, result_str);
+ 
+diff -ur a/ext/standard/basic_functions.stub.php b/ext/standard/basic_functions.stub.php
+--- a/ext/standard/basic_functions.stub.php
++++ b/ext/standard/basic_functions.stub.php
+@@ -1825,6 +1825,8 @@
+ 
+ function is_scalar(mixed $value): bool {}
+ 
++function is_literal(mixed $value): bool {}
++
+ /** @param string $callable_name */
+ function is_callable(mixed $value, bool $syntax_only = false, &$callable_name = null): bool {}
+ 
+diff -ur a/ext/standard/basic_functions_arginfo.h b/ext/standard/basic_functions_arginfo.h
+--- a/ext/standard/basic_functions_arginfo.h
++++ b/ext/standard/basic_functions_arginfo.h
+@@ -2087,6 +2087,8 @@
+ 
+ #define arginfo_is_scalar arginfo_boolval
+ 
++#define arginfo_is_literal arginfo_boolval
++
+ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_is_callable, 0, 1, _IS_BOOL, 0)
+ 	ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
+ 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, syntax_only, _IS_BOOL, 0, "false")
+@@ -2797,6 +2799,7 @@
+ ZEND_FUNCTION(is_array);
+ ZEND_FUNCTION(is_object);
+ ZEND_FUNCTION(is_scalar);
++ZEND_FUNCTION(is_literal);
+ ZEND_FUNCTION(is_callable);
+ ZEND_FUNCTION(is_iterable);
+ ZEND_FUNCTION(is_countable);
+@@ -3452,6 +3455,7 @@
+ 	ZEND_FE(is_array, arginfo_is_array)
+ 	ZEND_FE(is_object, arginfo_is_object)
+ 	ZEND_FE(is_scalar, arginfo_is_scalar)
++	ZEND_FE(is_literal, arginfo_is_literal)
+ 	ZEND_FE(is_callable, arginfo_is_callable)
+ 	ZEND_FE(is_iterable, arginfo_is_iterable)
+ 	ZEND_FE(is_countable, arginfo_is_countable)
+diff -ur a/ext/standard/string.c b/ext/standard/string.c
+--- a/ext/standard/string.c
++++ b/ext/standard/string.c
+@@ -1144,6 +1144,8 @@
+ 	zend_string  *str;
+ 	char         *cptr;
+ 	size_t        len = 0;
++	bool          literal = !ZSTR_LEN(glue) || ZSTR_IS_LITERAL(glue);
++
+ 	struct {
+ 		zend_string *str;
+ 		zend_long    lval;
+@@ -1169,6 +1171,9 @@
+ 			len += ZSTR_LEN(ptr->str);
+ 			ptr->lval = 0;
+ 			ptr++;
++			if (UNEXPECTED(literal && !ZSTR_IS_LITERAL(Z_STR_P(tmp)))) {
++				literal = false;
++			}
+ 		} else if (UNEXPECTED(Z_TYPE_P(tmp) == IS_LONG)) {
+ 			zend_long val = Z_LVAL_P(tmp);
+ 
+@@ -1182,11 +1187,13 @@
+ 				val /= 10;
+ 				len++;
+ 			}
++			literal = false;
+ 		} else {
+ 			ptr->str = zval_get_string_func(tmp);
+ 			len += ZSTR_LEN(ptr->str);
+ 			ptr->lval = 1;
+ 			ptr++;
++			literal = false;
+ 		}
+ 	} ZEND_HASH_FOREACH_END();
+ 
+@@ -1219,6 +1226,9 @@
+ 	}
+ 
+ 	free_alloca(strings, use_heap);
++	if (UNEXPECTED(literal)) {
++		ZSTR_SET_LITERAL(&str);
++	}
+ 	RETURN_NEW_STR(str);
+ }
+ /* }}} */
+@@ -5243,6 +5253,10 @@
+ 	/* Initialize the result string */
+ 	result = zend_string_safe_alloc(ZSTR_LEN(input_str), mult, 0, 0);
+ 	result_len = ZSTR_LEN(input_str) * mult;
++	
++	if (ZSTR_IS_LITERAL(input_str)) {
++		ZSTR_SET_LITERAL_FAST(result);
++	}
+ 
+ 	/* Heavy optimization for situations where input string is 1 byte long */
+ 	if (ZSTR_LEN(input_str) == 1) {
+@@ -5520,6 +5534,7 @@
+ {
+ 	/* Input arguments */
+ 	zend_string *input;				/* Input string */
++	zend_string *pad_string = NULL;
+ 	zend_long pad_length;			/* Length to pad to */
+ 
+ 	/* Helper variables */
+@@ -5529,12 +5544,13 @@
+ 	zend_long   pad_type_val = STR_PAD_RIGHT; /* The padding type value */
+ 	size_t	   i, left_pad=0, right_pad=0;
+ 	zend_string *result = NULL;	/* Resulting string */
++	bool literal = false;
+ 
+ 	ZEND_PARSE_PARAMETERS_START(2, 4)
+ 		Z_PARAM_STR(input)
+ 		Z_PARAM_LONG(pad_length)
+ 		Z_PARAM_OPTIONAL
+-		Z_PARAM_STRING(pad_str, pad_str_len)
++		Z_PARAM_STR(pad_string)
+ 		Z_PARAM_LONG(pad_type_val)
+ 	ZEND_PARSE_PARAMETERS_END();
+ 
+@@ -5544,6 +5560,15 @@
+ 		RETURN_STR_COPY(input);
+ 	}
+ 
++	if (pad_string) {
++		pad_str_len = ZSTR_LEN(pad_string);
++		pad_str = ZSTR_VAL(pad_string);
++
++		literal = ZSTR_IS_LITERAL(pad_string) && ZSTR_IS_LITERAL(input);
++	} else {
++		literal = ZSTR_IS_LITERAL(input);
++	}
++
+ 	if (pad_str_len == 0) {
+ 		zend_argument_value_error(3, "must be a non-empty string");
+ 		RETURN_THROWS();
+@@ -5590,6 +5615,10 @@
+ 
+ 	ZSTR_VAL(result)[ZSTR_LEN(result)] = '\0';
+ 
++	if (UNEXPECTED(literal)) {
++		ZSTR_SET_LITERAL_FAST(result);
++	}
++
+ 	RETURN_NEW_STR(result);
+ }
+ /* }}} */
+diff -ur a/ext/standard/type.c b/ext/standard/type.c
+--- a/ext/standard/type.c
++++ b/ext/standard/type.c
+@@ -397,6 +397,19 @@
+ }
+ /* }}} */
+ 
++/* {{{ Returns true if value is literal */
++PHP_FUNCTION(is_literal)
++{
++	zval *value;
++
++	ZEND_PARSE_PARAMETERS_START(1, 1)
++		Z_PARAM_ZVAL(value)
++	ZEND_PARSE_PARAMETERS_END();
++
++	RETURN_BOOL(Z_IS_LITERAL_P(value));
++}
++/* }}} */
++
+ /* {{{ Returns true if var is callable. */
+ PHP_FUNCTION(is_callable)
+ {
