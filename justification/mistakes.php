@@ -1,17 +1,6 @@
 <?php
 
 //--------------------------------------------------
-// Eloquent, DB::select
-// https://laravel.com/docs/8.x/database#running-a-select-query
-// Can only assume the programmer has written the SQL, and provided the user values separately.
-
-	$_GET['active'] = 'active';
-
-	$users = DB::select('select * from users where active = ' . $_GET['active']); // INSECURE
-
-	$users = DB::select('select * from users where active = ?', [$_GET['active']]);
-
-//--------------------------------------------------
 // Doctrine, Query Builder
 // https://www.doctrine-project.org/projects/doctrine-orm/en/current/reference/query-builder.html#high-level-api-methods
 
@@ -29,13 +18,77 @@
 //--------------------------------------------------
 // Doctrine, DQL
 // https://www.doctrine-project.org/projects/doctrine-orm/en/2.8/reference/dql-doctrine-query-language.html
-// An abstraction from SQL, with the same issues
+// While DQL is an SQL abstraction, it can have injection vulnerabilities as well.
 
 	$_GET['id'] = 'id';
 
 	$query = $em->createQuery('SELECT u FROM User u WHERE u.id = ' . $_GET['id']); // INSECURE
 
 	$query = $em->createQuery('SELECT u FROM User u WHERE u.id = ?1')->setParameter(1, $_GET['id']);
+
+//--------------------------------------------------
+// Laravel, DB::select()
+// https://laravel.com/docs/8.x/database#running-a-select-query
+// Plain SQL, where user values *should* be provided separately.
+
+	$_GET['active'] = 'active';
+
+	$users = DB::select('SELECT * FROM users WHERE active = ' . $_GET['active']); // INSECURE
+
+	$users = DB::select('SELECT * FROM users WHERE active = ?', [$_GET['active']]);
+
+//--------------------------------------------------
+// Laravel, QueryBuilder::where()
+// https://laravel.com/docs/9.x/queries
+
+	// Developer starts with this example from the documentation:
+	//
+	//   $users = DB::table('users')->where('name', 'like', $search . '%')->get();
+	//
+	// But their database uses first/last name fields, so they try `CONCAT()`
+	//
+	//   $users = DB::table('user')->where('CONCAT(name_first, " ", name_last)', 'LIKE', $search . '%');
+	//
+	// As they are using a function, this creates a parse error (gets quoted), so they use whereRaw():
+
+	$users = DB::table('user')->whereRaw('CONCAT(name_first, " ", name_last) LIKE "' . $search . '%"'); // INSECURE
+
+	$users = DB::table('user')->whereRaw('CONCAT(name_first, " ", name_last) LIKE ?', $search . '%');
+
+//--------------------------------------------------
+// Laravel, QueryBuilder::orderBy()
+// https://laravel.com/docs/9.x/queries
+
+	// Developer starts with this example from the documentation:
+	//
+	//   $users = DB::table('user')->orderBy('name');
+	//
+	// But their database uses first/last name fields, so they try:
+	//
+	//   $users = DB::table('user')->orderBy('name_first, name_last');
+	//
+	// This creates a parse error (quoted as a single value); they could use:
+	//
+	//   $users = DB::table('user')->orderBy('name_first')->orderBy('name_last');
+	//
+	//   $users = DB::table('user')->orderByRaw('name_first, name_last');
+	//
+	// They use the second, because Raw methods can be used quite often, e.g.
+	//
+	//   $users = DB::table('user')->orderByRaw('LENGTH(email)');
+	//
+	// And because it's "easier" for a user provided value to specify the sort order:
+
+	$_GET['sort'] = 'name_first, name_last';
+
+	$users = DB::table('user')->orderByRaw($_GET['sort'] ?? 'created'); // INSECURE
+
+	// Attacker exploits via:
+	//   'id'
+	//   'id = (SELECT 2 FROM admin WHERE id = 2)'
+	//   'id = (SELECT 2 FROM admin WHERE id = 2 AND password LIKE "a%")'
+	//   'id = (SELECT 2 FROM admin WHERE id = 2 AND password LIKE "b%")'
+	//   'id = (SELECT 2 FROM admin WHERE id = 2 AND password LIKE "c%")'
 
 //--------------------------------------------------
 // CakePHP, Query Builder
