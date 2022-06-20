@@ -163,4 +163,18 @@
 
 	$html = $twig->createTemplate('<p>Hi {{ name }}</p>')->render(['name' => $_GET['name']]);
 
+//--------------------------------------------------
+// Twig, Context issue
+
+	$_GET['url'] = 'javascript:alert()';
+
+	$html = $twig->createTemplate('<a href="{{ url }}">My Link</a>')->render(['url' => $_GET['url']]); // INSECURE
+
+//--------------------------------------------------
+// Twig, Missing quotes
+
+	$_GET['url'] = '/ onerror=alert()';
+
+	$html = $twig->createTemplate('<img src={{ url }} alt="Alt Text" />')->render(['url' => $_GET['url']]); // INSECURE
+
 ?>
