@@ -17,6 +17,6 @@ And when you un-comment the non-literal-string:
 
 ![Screenshot of the code error, as it cannot compile](./screenshot-2.png)
 
-Note how the error finds a String, when it requires a "String & Singleton".
+Note how the error finds a `String`, when it requires a `String & Singleton`.
 
 Thanks to [Tamer Abdulradi](https://twitter.com/tabdulradi)
