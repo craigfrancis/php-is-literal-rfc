@@ -1,6 +1,6 @@
 ## String with Singleton
 
-Use [Scastie](https://scastie.scala-lang.org/), or [Install Scala](https://docs.scala-lang.org/getting-started/).
+Use [Scastie](https://scastie.scala-lang.org/) (switch off "Worksheet"), or [Install Scala](https://docs.scala-lang.org/getting-started/).
 
 The key part is `String with Singleton`, as shown in [Main.scala](./src/main/scala/Main.scala):
 
