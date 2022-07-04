@@ -177,4 +177,22 @@
 
 	$html = $twig->createTemplate('<img src={{ url }} alt="Alt Text" />')->render(['url' => $_GET['url']]); // INSECURE
 
+//--------------------------------------------------
+// Zeta Components, Database Handler
+// http://zetacomponents.org/documentation/trunk/Database/tutorial.html#handler-usage
+
+	$stmt = $db->prepare( 'SELECT * FROM quotes WHERE author = "' . $_GET['author'] . '"' ); // INSECURE
+
+	$stmt = $db->prepare( 'SELECT * FROM quotes WHERE author = :author' );
+	$stmt->bindValue( ':author', $_GET['author'] );
+
+//--------------------------------------------------
+// Zeta Components, Database "Query Abstraction"
+// http://zetacomponents.org/documentation/trunk/Database/tutorial.html#bind-parameters
+
+	$_GET['sort'] = 'IF((SELECT 1 FROM user WHERE id = 1 AND name LIKE "a%"), name, id)';
+
+	$q->select( '*' )->from( 'quotes' )
+	  ->orderBy( $_GET['sort'] ); // INSECURE
+
 ?>
