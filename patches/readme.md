@@ -52,7 +52,6 @@ export PKG_CONFIG_PATH="/usr/local/opt/openssl/lib/pkgconfig:/usr/local/opt/icu4
     --with-curl \
     --with-external-gd \
     --with-external-pcre \
-    --with-ffi \
     --with-fpm-user=_www \
     --with-fpm-group=_www \
     --with-iconv=/usr/local/opt/libiconv \
