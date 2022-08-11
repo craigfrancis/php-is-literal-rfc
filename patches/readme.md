@@ -19,7 +19,7 @@ To create a new patch:
 Then compile...
 
 ```
-brew install bison re2c libiconv icu4c mhash;
+brew install openssl bison re2c libiconv icu4c mhash;
 
 export PATH="/usr/local/opt/bison/bin:$PATH" && \
 export PKG_CONFIG_PATH="/usr/local/opt/openssl/lib/pkgconfig:/usr/local/opt/icu4c/lib/pkgconfig" && \
