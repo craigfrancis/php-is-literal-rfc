@@ -18,14 +18,14 @@ import typing
 #--------------------------------------------------
 
 def run_query(sql: typing.LiteralString, parameters: typing.List[str] = []) -> None:
-    print(sql)
-    print(parameters)
-    print('\n')
+  print(sql)
+  print(parameters)
+  print('\n')
 
 def placeholders(count: int) -> typing.LiteralString:
   sql = '?'
   for x in range(1, count):
-      sql += ',?'
+    sql += ',?'
   return sql
 
 #--------------------------------------------------
@@ -36,9 +36,9 @@ username = input('Enter your name: ')
 
 run_query('WHERE username = ?', [username])
 
-run_query('WHERE username = ' + os.getenv('MY_USER')); # Wrong
-run_query('WHERE username = ' + sys.argv[0]); # Wrong
-run_query('WHERE username = ' + username); # Wrong
+run_query('WHERE username = ' + os.getenv('MY_USER')) # Wrong
+run_query('WHERE username = ' + sys.argv[0]) # Wrong
+run_query('WHERE username = ' + username) # Wrong
 
 #--------------------------------------------------
 
@@ -47,11 +47,11 @@ param = []
 
 if username != '':
   sql += ' AND username LIKE ?'
-  param.append('%' + username + '%');
+  param.append('%' + username + '%')
 
-ids = [1, 2, 3, 4, 5];
+ids = [1, 2, 3, 4, 5]
 if len(ids) > 0:
   sql += ' AND u.id IN (' + placeholders(len(ids)) + ')'
   param.extend(ids)
 
-run_query(sql, param);
+run_query(sql, param)
