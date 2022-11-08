@@ -1,15 +1,15 @@
 #!/usr/bin/env python3.11
 
 # Run with:
-#   export NAME="Example"; python3.11 index.py
+#  export NAME="Example"; python3.11 index.py
 
 # Check with:
-#   https://pyre-check.org/play/
+#  https://pyre-check.org/play/
 
 # More details at:
-#   https://docs.python.org/3.11/library/typing.html#typing.LiteralString
-#   https://peps.python.org/pep-0675/
-#   https://www.youtube.com/watch?v=nRt_xk2MGYU
+#  https://docs.python.org/3.11/library/typing.html#typing.LiteralString
+#  https://peps.python.org/pep-0675/
+#  https://www.youtube.com/watch?v=nRt_xk2MGYU
 
 #---
 
