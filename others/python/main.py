@@ -20,15 +20,12 @@ import typing
 #---
 
 def run_sql(sql: typing.LiteralString, parameters: typing.List[str] = []) -> None:
-
   print(sql, '\n', parameters, '\n')
 
 def placeholders(count: int) -> typing.LiteralString:
-
   sql = '?'
   for x in range(1, count):
     sql += ',?'
-
   return sql
 
 def main() -> int:
