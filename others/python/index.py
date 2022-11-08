@@ -36,9 +36,9 @@ username = input('Enter your name: ')
 
 run_query('WHERE username = ?', [username])
 
-run_query('WHERE username = ' + os.getenv('MY_USER'));
-run_query('WHERE username = ' + sys.argv[0]);
-run_query('WHERE username = ' + username);
+run_query('WHERE username = ' + os.getenv('MY_USER')); # Wrong
+run_query('WHERE username = ' + sys.argv[0]); # Wrong
+run_query('WHERE username = ' + username); # Wrong
 
 #--------------------------------------------------
 
