@@ -18,9 +18,7 @@ import typing
 #--------------------------------------------------
 
 def run_query(sql: typing.LiteralString, parameters: typing.List[str] = []) -> None:
-  print(sql)
-  print(parameters)
-  print('\n')
+  print(sql, '\n', parameters, '\n')
 
 def placeholders(count: int) -> typing.LiteralString:
   sql = '?'
@@ -30,15 +28,15 @@ def placeholders(count: int) -> typing.LiteralString:
 
 #--------------------------------------------------
 
-username = input('Enter your name: ')
+username = input('Your name: ')
 
 #--------------------------------------------------
 
 run_query('WHERE username = ?', [username])
 
+run_query('WHERE username = ' + username) # Wrong
 run_query('WHERE username = ' + os.getenv('MY_USER')) # Wrong
 run_query('WHERE username = ' + sys.argv[0]) # Wrong
-run_query('WHERE username = ' + username) # Wrong
 
 #--------------------------------------------------
 
