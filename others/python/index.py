@@ -1,7 +1,7 @@
 #!/usr/bin/env python3.11
 
 # Run with:
-# export MY_USER="Example"; python3.11 index.py
+# export NAME="Example"; python3.11 index.py
 
 # Check with:
 # https://pyre-check.org/play/
@@ -15,9 +15,9 @@ import sys
 import os
 import typing
 
-#--------------------------------------------------
+#---
 
-def run_query(sql: typing.LiteralString, parameters: typing.List[str] = []) -> None:
+def run_sql(sql: typing.LiteralString, parameters: typing.List[str] = []) -> None:
   print(sql, '\n', parameters, '\n')
 
 def placeholders(count: int) -> typing.LiteralString:
@@ -26,30 +26,30 @@ def placeholders(count: int) -> typing.LiteralString:
     sql += ',?'
   return sql
 
-#--------------------------------------------------
+#---
 
-username = input('Your name: ')
+name = input('Your name: ')
 
-#--------------------------------------------------
+#---
 
-run_query('WHERE username = ?', [username])
+run_sql('WHERE name = ?', [name])
 
-run_query('WHERE username = ' + username) # Wrong
-run_query('WHERE username = ' + os.getenv('MY_USER')) # Wrong
-run_query('WHERE username = ' + sys.argv[0]) # Wrong
+run_sql('WHERE name = ' + name) # Wrong
+run_sql('WHERE name = ' + os.getenv('NAME')) # Wrong
+run_sql('WHERE name = ' + sys.argv[0]) # Wrong
 
-#--------------------------------------------------
+#---
 
 sql = 'SELECT * FROM user WHERE deleted IS NULL'
 param = []
 
-if username != '':
-  sql += ' AND username LIKE ?'
-  param.append('%' + username + '%')
+if name != '':
+  sql += ' AND name LIKE ?'
+  param.append('%' + name + '%')
 
-ids = [1, 2, 3, 4, 5]
+ids = [1, 2, 3]
 if len(ids) > 0:
-  sql += ' AND u.id IN (' + placeholders(len(ids)) + ')'
+  sql += ' AND id IN (' + placeholders(len(ids)) + ')'
   param.extend(ids)
 
-run_query(sql, param)
+run_sql(sql, param)
