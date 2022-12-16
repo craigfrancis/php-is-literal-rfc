@@ -28,7 +28,7 @@ diff -ur a/Zend/zend_compile.c b/Zend/zend_compile.c
  	} else {
  		return zend_string_copy(name);
  	}
-@@ -3832,7 +3838,21 @@
+@@ -3858,7 +3864,21 @@
  	opline = zend_emit_op_tmp(result, ZEND_TYPE_CHECK, &arg_node, NULL);
  	opline->extended_value = (1 << IS_FALSE | 1 << IS_TRUE | 1 << IS_DOUBLE | 1 << IS_LONG | 1 << IS_STRING);
  	return SUCCESS;
@@ -51,7 +51,7 @@ diff -ur a/Zend/zend_compile.c b/Zend/zend_compile.c
  
  static zend_result zend_compile_func_cast(znode *result, zend_ast_list *args, uint32_t type) /* {{{ */
  {
-@@ -4363,6 +4383,8 @@
+@@ -4391,6 +4411,8 @@
  		return zend_compile_func_typecheck(result, args, IS_RESOURCE);
  	} else if (zend_string_equals_literal(lcname, "is_scalar")) {
  		return zend_compile_func_is_scalar(result, args);
@@ -119,7 +119,7 @@ diff -ur a/Zend/zend_language_scanner.l b/Zend/zend_language_scanner.l
  	return SUCCESS;
  }
  
-@@ -2151,7 +2168,7 @@
+@@ -2145,7 +2162,7 @@
  
  <ST_VAR_OFFSET>{LNUM}|{HNUM}|{BNUM}|{ONUM} { /* Offset must be treated as a string */
  	if (yyleng == 1) {
@@ -128,7 +128,7 @@ diff -ur a/Zend/zend_language_scanner.l b/Zend/zend_language_scanner.l
  	} else {
  		ZVAL_STRINGL(zendlval, yytext, yyleng);
  	}
-@@ -2306,7 +2323,7 @@
+@@ -2300,7 +2317,7 @@
  			yyless(readsize);
  		}
  	} else if (yyleng == 1) {
@@ -137,7 +137,7 @@ diff -ur a/Zend/zend_language_scanner.l b/Zend/zend_language_scanner.l
  	} else {
  		ZVAL_STRINGL(zendlval, yytext, yyleng);
  	}
-@@ -2481,13 +2498,13 @@
+@@ -2475,13 +2492,13 @@
  
  	if (yyleng-bprefix-2 <= 1) {
  		if (yyleng-bprefix-2 < 1) {
@@ -153,7 +153,7 @@ diff -ur a/Zend/zend_language_scanner.l b/Zend/zend_language_scanner.l
  		}
  		goto skip_escape_conversion;
  	}
-@@ -2545,6 +2562,15 @@
+@@ -2539,6 +2556,15 @@
  		zend_string_release_ex(Z_STR_P(zendlval), 0);
  		ZVAL_STR(zendlval, new_str);
  	}
@@ -169,7 +169,7 @@ diff -ur a/Zend/zend_language_scanner.l b/Zend/zend_language_scanner.l
  	RETURN_TOKEN_WITH_VAL(T_CONSTANT_ENCAPSED_STRING);
  }
  
-@@ -3111,7 +3137,7 @@
+@@ -3105,7 +3131,7 @@
  emit_token_with_val:
  	if (PARSER_MODE()) {
  		ZEND_ASSERT(Z_TYPE_P(zendlval) != IS_UNDEF);
@@ -708,7 +708,7 @@ diff -ur a/Zend/zend_vm_opcodes.h b/Zend/zend_vm_opcodes.h
 diff -ur a/ext/opcache/ZendAccelerator.c b/ext/opcache/ZendAccelerator.c
 --- a/ext/opcache/ZendAccelerator.c
 +++ b/ext/opcache/ZendAccelerator.c
-@@ -471,7 +471,7 @@
+@@ -472,7 +472,7 @@
  }
  
  static zend_always_inline zend_string *accel_find_interned_string(zend_string *str)
@@ -717,7 +717,7 @@ diff -ur a/ext/opcache/ZendAccelerator.c b/ext/opcache/ZendAccelerator.c
  	zend_ulong   h;
  	uint32_t     pos;
  	zend_string *s;
-@@ -495,7 +495,8 @@
+@@ -496,7 +496,8 @@
  	if (EXPECTED(pos != STRTAB_INVALID_POS)) {
  		do {
  			s = STRTAB_POS_TO_STR(&ZCSG(interned_strings), pos);
@@ -727,7 +727,7 @@ diff -ur a/ext/opcache/ZendAccelerator.c b/ext/opcache/ZendAccelerator.c
  				return s;
  			}
  			pos = STRTAB_COLLISION(s);
-@@ -528,7 +529,8 @@
+@@ -529,7 +530,8 @@
  	if (EXPECTED(pos != STRTAB_INVALID_POS)) {
  		do {
  			s = STRTAB_POS_TO_STR(&ZCSG(interned_strings), pos);
@@ -737,7 +737,7 @@ diff -ur a/ext/opcache/ZendAccelerator.c b/ext/opcache/ZendAccelerator.c
  				goto finish;
  			}
  			pos = STRTAB_COLLISION(s);
-@@ -549,6 +551,9 @@
+@@ -550,6 +552,9 @@
  	*hash_slot = STRTAB_STR_TO_POS(&ZCSG(interned_strings), s);
  	GC_SET_REFCOUNT(s, 2);
  	GC_TYPE_INFO(s) = GC_STRING | ((IS_STR_INTERNED | IS_STR_PERMANENT) << GC_FLAGS_SHIFT);
@@ -747,7 +747,7 @@ diff -ur a/ext/opcache/ZendAccelerator.c b/ext/opcache/ZendAccelerator.c
  	ZSTR_H(s) = h;
  	ZSTR_LEN(s) = ZSTR_LEN(str);
  	memcpy(ZSTR_VAL(s), ZSTR_VAL(str), ZSTR_LEN(s) + 1);
-@@ -1447,6 +1452,9 @@
+@@ -1454,6 +1459,9 @@
  			ZSTR_H(new_key) = ZSTR_H(key);
  			ZSTR_LEN(new_key) = ZSTR_LEN(key);
  			memcpy(ZSTR_VAL(new_key), ZSTR_VAL(key), ZSTR_LEN(new_key) + 1);
@@ -810,7 +810,7 @@ diff -ur a/ext/opcache/jit/zend_jit_helpers.c b/ext/opcache/jit/zend_jit_helpers
 diff -ur a/ext/standard/basic_functions.stub.php b/ext/standard/basic_functions.stub.php
 --- a/ext/standard/basic_functions.stub.php
 +++ b/ext/standard/basic_functions.stub.php
-@@ -1916,6 +1916,8 @@
+@@ -2737,6 +2737,8 @@
  
  function is_scalar(mixed $value): bool {}
  
@@ -850,7 +850,7 @@ diff -ur a/ext/standard/basic_functions_arginfo.h b/ext/standard/basic_functions
 diff -ur a/ext/standard/string.c b/ext/standard/string.c
 --- a/ext/standard/string.c
 +++ b/ext/standard/string.c
-@@ -1146,6 +1146,8 @@
+@@ -1107,6 +1107,8 @@
  	zend_string  *str;
  	char         *cptr;
  	size_t        len = 0;
@@ -859,7 +859,7 @@ diff -ur a/ext/standard/string.c b/ext/standard/string.c
  	struct {
  		zend_string *str;
  		zend_long    lval;
-@@ -1171,6 +1173,9 @@
+@@ -1132,6 +1134,9 @@
  			len += ZSTR_LEN(ptr->str);
  			ptr->lval = 0;
  			ptr++;
@@ -869,7 +869,7 @@ diff -ur a/ext/standard/string.c b/ext/standard/string.c
  		} else if (UNEXPECTED(Z_TYPE_P(tmp) == IS_LONG)) {
  			zend_long val = Z_LVAL_P(tmp);
  
-@@ -1184,11 +1189,13 @@
+@@ -1145,11 +1150,13 @@
  				val /= 10;
  				len++;
  			}
@@ -883,7 +883,7 @@ diff -ur a/ext/standard/string.c b/ext/standard/string.c
  		}
  	} ZEND_HASH_FOREACH_END();
  
-@@ -1221,6 +1228,9 @@
+@@ -1182,6 +1189,9 @@
  	}
  
  	free_alloca(strings, use_heap);
@@ -893,7 +893,7 @@ diff -ur a/ext/standard/string.c b/ext/standard/string.c
  	RETURN_NEW_STR(str);
  }
  /* }}} */
-@@ -5282,6 +5292,10 @@
+@@ -5256,6 +5266,10 @@
  	/* Initialize the result string */
  	result = zend_string_safe_alloc(ZSTR_LEN(input_str), mult, 0, 0);
  	result_len = ZSTR_LEN(input_str) * mult;
@@ -904,7 +904,7 @@ diff -ur a/ext/standard/string.c b/ext/standard/string.c
  
  	/* Heavy optimization for situations where input string is 1 byte long */
  	if (ZSTR_LEN(input_str) == 1) {
-@@ -5531,6 +5545,7 @@
+@@ -5505,6 +5519,7 @@
  {
  	/* Input arguments */
  	zend_string *input;				/* Input string */
@@ -912,8 +912,8 @@ diff -ur a/ext/standard/string.c b/ext/standard/string.c
  	zend_long pad_length;			/* Length to pad to */
  
  	/* Helper variables */
-@@ -5540,12 +5555,13 @@
- 	zend_long   pad_type_val = STR_PAD_RIGHT; /* The padding type value */
+@@ -5514,12 +5529,13 @@
+ 	zend_long   pad_type_val = PHP_STR_PAD_RIGHT; /* The padding type value */
  	size_t	   i, left_pad=0, right_pad=0;
  	zend_string *result = NULL;	/* Resulting string */
 +	bool literal = false;
@@ -927,7 +927,7 @@ diff -ur a/ext/standard/string.c b/ext/standard/string.c
  		Z_PARAM_LONG(pad_type_val)
  	ZEND_PARSE_PARAMETERS_END();
  
-@@ -5555,6 +5571,15 @@
+@@ -5529,6 +5545,15 @@
  		RETURN_STR_COPY(input);
  	}
  
@@ -943,7 +943,7 @@ diff -ur a/ext/standard/string.c b/ext/standard/string.c
  	if (pad_str_len == 0) {
  		zend_argument_value_error(3, "must be a non-empty string");
  		RETURN_THROWS();
-@@ -5601,6 +5626,10 @@
+@@ -5575,6 +5600,10 @@
  
  	ZSTR_VAL(result)[ZSTR_LEN(result)] = '\0';
  
