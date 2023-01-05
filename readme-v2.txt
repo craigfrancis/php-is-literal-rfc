@@ -14,17 +14,17 @@
 
 ===== Introduction =====
 
-Add //LiteralString// type, and //is_literal_string()//, to check a variable contains a "developer defined string".
+Add //LiteralString// type, and //is_literal_string()//, to check that a variable contains a "developer defined string".
 
-This ensures the value cannot be a source of an Injection Vulnerability (does not contain user input).
+This ensures the value cannot be a source of an Injection Vulnerability, because it does not contain user input.
 
-This technique is used at Google (as described in "Building Secure and Reliable Systems", see [[https://static.googleusercontent.com/media/sre.google/en//static/pdf/building_secure_and_reliable_systems.pdf#page=287|Common Security Vulnerabilities, pages 251-255]], which shows how "developer-controlled input" prevents these issues in Go); it is used at FaceBook with the new LiteralString type in Python (now in 3.11 via [[https://peps.python.org/pep-0675/|PEP 675]]); and Christoph Kern discussed it in 2016 with [[https://www.youtube.com/watch?v=ccfEu-Jj0as|Preventing Security Bugs through Software Design]]. Also explained at [[https://www.usenix.org/conference/usenixsecurity15/symposium-program/presentation/kern|USENIX Security 2015]], [[https://www.youtube.com/watch?v=06_suQAAfBc|OWASP AppSec US 2021]], and summarised at [[https://eiv.dev/|eiv.dev]].
+This technique is used at Google (as described in "Building Secure and Reliable Systems", see [[https://static.googleusercontent.com/media/sre.google/en//static/pdf/building_secure_and_reliable_systems.pdf#page=287|Common Security Vulnerabilities, pages 251-255]], which shows how "developer-controlled input" prevents these issues in Go); it's used by FaceBook developers (ref [[https://eiv.dev/python-pyre/|pyre type-checker]], which has been added to Python 3.11 via [[https://peps.python.org/pep-0675/|PEP 675]]); and Christoph Kern discussed it in 2016 with [[https://www.youtube.com/watch?v=ccfEu-Jj0as|Preventing Security Bugs through Software Design]]. Also explained at [[https://www.usenix.org/conference/usenixsecurity15/symposium-program/presentation/kern|USENIX Security 2015]], [[https://www.youtube.com/watch?v=06_suQAAfBc|OWASP AppSec US 2021]], and summarised at [[https://eiv.dev/|eiv.dev]].
 
 ===== The Problem =====
 
-Injection and Cross-Site Scripting (XSS) vulnerabilities are **easy to make**, **hard to identify**, and **still common**.
+Injection and Cross-Site Scripting (XSS) vulnerabilities are **easy to make**, **hard to identify**, and **very common**.
 
-With SQL Injection, it often takes [[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/mistakes.php|1 mistake]] for the attacker to read everything in the database (SQL Map, Havij, jSQL, etc).
+With SQL Injection, it often takes a single mistake for the attacker to read everything in the database (SQL Map, Havij, jSQL, etc) [[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/mistakes.php|Examples ]].
 
 <code php>
 $qb->select('u')
@@ -43,7 +43,7 @@ DB::table('user')->whereRaw('CONCAT(name_first, " ", name_last) LIKE "' . $searc
 DB::table('user')->whereRaw('CONCAT(name_first, " ", name_last) LIKE ?', $search . '%'); // INSECURE
 </code>
 
-On the plus side, in the latest [[https://owasp.org/www-project-top-ten/|OWASP Top 10]], due to the use of better (not perfect) database abstractions, Injection Vulnerabilities have finally moved off the top spot... to third.
+In the latest [[https://owasp.org/www-project-top-ten/|OWASP Top 10]], Injection Vulnerabilities rank third highest security risk to web applications (database abstractions have at least helped move them from the top spot, but do not solve the problem).
 
 ^  Year           ^  Injection Position  ^  XSS Position  ^
 |  2021 - Latest  |  3                   |  3             |
@@ -56,17 +56,16 @@ On the plus side, in the latest [[https://owasp.org/www-project-top-ten/|OWASP T
 
 ===== Proposal =====
 
-A string is considered a LiteralString if it was defined by the programmer (in source code), or is the result of LiteralString values being concatenated.
+A string will be of the LiteralString type if it was defined by the programmer (in source code), or is the result of LiteralString values being concatenated. The LiteralString type is lost when the value is modified.
 
-The following string functions can produce LiteralString values:
+The following string concatenation functions can return LiteralString values:
 
   - //str_repeat()//
   - //str_pad()//
   - //implode()//
   - //join()//
-  - //array_fill()//
 
-Also, Namespaces constructed for the programmer by the compiler will also be marked as a LiteralString for convenience.
+Namespaces constructed for the programmer by the compiler will be marked as a LiteralString.
 
 ==== Examples ====
 
@@ -100,23 +99,23 @@ function example2(String $input) {
 }
 </code>
 
-Most libraries will probably use something like //example2()// to test the values they receive, partially for backwards compatibility reasons, but it also allows them to choose how mistakes are handled. For example, I would suggest using logged warnings by default, with an option to raise exceptions for those developers who are confident their code is ready, or when it's in development mode, or they could provide a way to disable checks on a per query basis, or entirely for legacy projects ([[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/example.php?ts=4|example]]).
+Most libraries will probably use something like //example2()// to test the values they receive, partially for backwards compatibility reasons, but also because it allows them to easily choose how mistakes are handled. For example, I would suggest libraries used logged warnings by default, with an option to throw exceptions for those developers who are confident their code is ready or when it's in development mode, or they could provide a way to disable checks on a per query basis, or entirely for legacy projects ([[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/example.php?ts=4|example]]).
 
 Libraries could also check their output (e.g. SQL to a database) is still a LiteralString, but this isn't a priority (libraries are rarely the source of Injection Vulnerabilities, it's usually the developer using them incorrectly).
 
-The original implementation provided the //is_literal()// function, which you can try at [[https://3v4l.org/#focus=rfc.literals|3v4l.org]].
+You can test it at [[https://3v4l.org/#vrfc.literals|3v4l.org]] using the previous "is_literal()" function name.
 
 ===== Considerations =====
 
 ==== Performance ====
 
-Máté Kocsis created a [[https://github.com/kocsismate/php-version-benchmarks/|php benchmark]] to replicate the old [[https://01.org/node/3774|Intel Tests]]. The results for the original implementation found a 0.47% impact with the Symfony demo app, where it did not connect to a database (because the variability introduced makes it impossible to measure the impact).
+Máté Kocsis created a [[https://github.com/kocsismate/php-version-benchmarks/|PHP benchmark]] to replicate the old [[https://01.org/node/3774|Intel Tests]]. The results for the implementation found a 0.47% impact with the Symfony demo app, where it did not connect to a database (because the natural variability introduced by that makes it impossible to measure an impact that small).
 
 ==== String Concatenation ====
 
 When two LiteralString values are concatenated, the result is also a LiteralString.
 
-There is an argument that not supporting concatenation might help debugging. The theory being, in a long complex script, which only checks if a variable is a LiteralString at the end, it's harder to identify the source of the problem. Over the last year I've not found this to be the case, whereas it would be hard to update every library and all existing code to not use concatenation (e.g. to use a query builder). That said, someone who wants this strict way of working could use:
+Some people may believe that not supporting concatenation might help debugging, with the thought being, in a long complex script, which only checks if a variable is a LiteralString at the end, it's harder to identify the source of the problem. However, over the last year I've simply not found this to be the case, and it would be nigh-on-impossible to update every library and all existing code to not use concatenation (e.g. to use a query builder). That said, someone who really wants this strict way of working could use:
 
 <code php>
 function literal_implode($separator, $array) {
@@ -132,15 +131,15 @@ function literal_concat(...$a) {
 }
 </code>
 
-On a more technical note, we did try an implementation that didn't support concatenation, primarily to see if this would help reduce the performance impact even further. Firstly, the PHP engine can still concatenate values automatically at compile-time (so concatenation appears to work in some contexts), and it didn't make much (if any) difference in regards to performance, because //concat_function()// in "zend_operators.c" uses //zend_string_extend()// (which needs to remove the //LiteralString// flag) and "zend_vm_def.h" does the same; by supporting a quick concat with an empty string (x2), which would need its flag removed as well.
+(On a technical note, we did test an implementation that didn't support concatenation, primarily to see if this would help reduce the performance impact even further. However, the PHP engine can sometimes still concatenate values automatically at compile-time (so concatenation appears to work in some contexts), and it didn't make much (if any) difference in regards to performance, because //concat_function()// in "zend_operators.c" uses //zend_string_extend()// (which needs to remove the //LiteralString// flag) and "zend_vm_def.h" does the same; by supporting a quick concat with an empty string (x2), which would need its flag removed as well).
 
 ==== String Splitting ====
 
-In short, we can't find any real use cases (security features should try to keep the implementation as simple as possible).
+In regards to string splitting, we didn't find any realistic use cases, and security features should try to keep the implementation as simple as possible.
 
 Also, the security considerations are different. Concatenation joins known/fixed units together, whereas if you're starting with a LiteralString, and the program allows the Evil-User to split the string (e.g. setting the length in substr), then they get considerable control over the result (it creates an untrusted modification).
 
-While unlikely to be written by a programmer, consider these:
+While unlikely to be written by a programmer, we can consider these:
 
 <code php>
 $length = ($_GET['length'] ?? -5);
@@ -148,15 +147,15 @@ $url    = substr('https://example.com/js/a.js?v=55', 0, $length);
 $html   = substr('<a href="#">#</a>', 0, $length);
 </code>
 
-If $url was used in a Content-Security-Policy, the query string needs to be removed, but as more of the string is removed, the more resources are allowed ("https:" basically allows resources from anywhere). With the HTML example, moving from the tag content to the attribute can be a problem (technically the HTML Templating Engine should be fine, but unfortunately libraries like Twig are not currently context aware, so you need to change from the default 'html' encoding to explicitly using 'html_attr' encoding).
+If $url was used in a Content-Security-Policy, the query string needs to be removed, but as more of the string is removed, the more resources are allowed ("https:" basically allows resources from anywhere). With the HTML example, moving from the tag content to the attribute can be a problem (technically the HTML Templating Engine should be fine, but unfortunately libraries like Twig are not currently context aware, so you need to change from the default 'html' encoding to 'html_attr' encoding).
 
-Trying to determine if the LiteralString flag should be passed through functions like //substr()// is complex. Having a security feature be difficult to reason about, gives a much higher chance of mistakes.
+Krzysztof Kotowicz has confirmed that, at Google, with "go-safe-html", string concatenation is allowed, but splitting is **explicitly** not supported because it "can cause issues"; for example, "arbitrary split position of a HTML string can change the context".
 
-Krzysztof Kotowicz has confirmed that, at Google, with "go-safe-html", string concatenation is allowed, but splitting is explicitly not supported because it "can cause issues"; for example, "arbitrary split position of a HTML string can change the context".
+===== Frequently Asked Questions =====
 
-==== WHERE IN ====
+==== FAQ: WHERE IN ====
 
-With SQL, you can use //WHERE id IN (?,?,?)//.
+With SQL, you can use //WHERE id IN (?,?,?)//
 
 User values should be sent to the database separately (with prepared queries), so you should follow the advice from [[https://stackoverflow.com/a/23641033/538216|Levi Morrison]], [[https://www.php.net/manual/en/pdostatement.execute.php#example-1012|PDO Execute]], and [[https://www.drupal.org/docs/7/security/writing-secure-code/database-access#s-multiple-arguments|Drupal Multiple Arguments]], and use something like this:
 
@@ -179,11 +178,11 @@ Libraries can also abstract this for the developer, e.g. WordPress should suppor
 $wpdb->prepare('SELECT * FROM table WHERE id IN (%...d)', $ids)
 </code>
 
-==== Non-Parameterised Values ====
+==== FAQ: Non-Parameterised Values ====
 
-With Table and Field names in SQL, you cannot use parameters (must be in the SQL string).
+With Table and Field names in SQL, you cannot use parameters, these must be in the SQL string.
 
-Ideally they would be LiteralString's anyway (so no change needed); and if they are dependent on user input, in most cases you can (and should) use an array of permitted LiteralString values:
+Ideally they would be LiteralStrings anyway (so no change needed); and if they are dependent on user input, in most cases you can (and should) use an array of //permitted// LiteralString values:
 
 <code php>
 $sort = ($_GET['sort'] ?? NULL);
@@ -211,15 +210,15 @@ $fields = [
 $sql = 'ORDER BY ' . ($fields[$sort] ?? 'u.full_name');
 </code>
 
-But there may be some exceptions, see the next section.
+There may be some exceptions, see the next section.
 
-==== Non-LiteralString Values ====
+==== FAQ: Non-LiteralString Values ====
 
-There might still be some cases where a non-LiteralString needs to be used.
+So what do we do when a non-LiteralString needs to be used?
 
 For example [[https://news-web.php.net/php.internals/87667|Dennis Birkholz]] noted that some Systems/Frameworks define some variables (e.g. table name prefixes) without the use of a LiteralString (e.g. ini/json/yaml). And Larry Garfield noted that in Drupal's ORM "the table name itself is user-defined" (not in the PHP script).
 
-These special non-LiteralString values should still be handled separately (and carefully); where the library checks the sensitive inputs (SQL/HTML/CLI/etc) are still LiteralStrings, and accepts any special values separately, where it can safely/consistently use them (e.g. using backtick escaping for identifiers, as they are added to the SQL string, which goes to a MySQL database).
+These special non-LiteralString values should still be handled separately (and carefully); where the library checks the sensitive inputs (SQL/HTML/CLI/etc) are still LiteralStrings, and accepts any special values separately, where it can safely/consistently use them (e.g. using backtick escaping for identifiers being sent to a MySQL database).
 
 For example, using a [[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/example.php?ts=4#L194|separate array of $identifiers]]:
 
@@ -252,7 +251,7 @@ $wpdb->prepare('SELECT * FROM %i', $table_name);
 
 Or the library could use a [[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/example.php?ts=4#L229|Query Builder]].
 
-==== Bypassing It ====
+==== FAQ: Bypassing It ====
 
 This implementation does not provide an easy way for a developer to mark anything they want as a LiteralString, this is on purpose - we do not want to re-create one of the problems with Taint Checking, by pretending the LiteralString is a flag to say the value is "safe".
 
@@ -283,13 +282,13 @@ function example2($input) {
 
 But we do not pretend there aren't ways around this (e.g. using [[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/is-literal-bypass.php|eval]]), but in doing so the developer is clearly choosing to do something wrong. We want to provide safety rails, but there is nothing stopping the developer from intentionally jumping over them.
 
-==== Integer Values ====
+==== FAQ: Integer Values ====
 
 We wanted to flag integers defined in the source code, in the same way we are doing with strings. Unfortunately [[https://news-web.php.net/php.internals/114964|it would require a big change to add a literal flag on integers]]. Changing how integers work internally would have made a big performance impact, and potentially affected every part of PHP (including extensions).
 
-Due to this limitation, we did consider an approach to trust all integers, where Scott Arciszewski suggested the name //is_noble()//. While this is not as philosophically pure, we continued to explore this possibility because we could not find any way an Injection Vulnerability could be introduced with integers in SQL, HTML, CLI; and other contexts as well (e.g. preg, mail additional_params, XPath query, and even eval). We could not find any character encoding issues either (The closest we could find was EBCDIC, an old IBM character encoding, which encodes the 0-9 characters differently; which anyone using it would need to re-encode either way, and [[https://www.php.net/manual/en/migration80.other-changes.php#migration80.other-changes.ebcdic|EBCDIC is not supported by PHP]]). And we could not find any issue with a 64bit PHP server sending a large number to a 32bit database, because the number is being encoded as characters in a string (so that's also fine). However, the feedback received was that while safe from Injection Vulnerabilities, it becomes a more complex concept, one that might cause developers to assume it is also safe from developer/logic errors. Ultimately the preference was the simpler approach, that did not allow any integers (why this RFC uses the name LiteralString).
+Due to this limitation, we did consider an approach to trust all integers, where Scott Arciszewski suggested the name //is_noble()//. While this is not as philosophically pure, we continued to explore this possibility because we could not find any way an Injection Vulnerability could be introduced with integers in SQL, HTML, CLI; and other contexts as well (e.g. preg, mail additional_params, XPath query, and even eval). We could not find any character encoding issues either (The closest we could find was EBCDIC, an old IBM character encoding, which encodes the 0-9 characters differently; which anyone using it would need to re-encode either way, and [[https://www.php.net/manual/en/migration80.other-changes.php#migration80.other-changes.ebcdic|EBCDIC is not supported by PHP]]). And we could not find any issue with a 64bit PHP server sending a large number to a 32bit database, because the number is being encoded as characters in a string (so that's also fine). However, the feedback received was that while safe from Injection Vulnerabilities, it becomes a more complex concept, one that might cause developers to assume it is also safe from developer/logic errors. Ultimately the preference was the simpler approach, that did not allow any integers (which is reinforced with the name LiteralString).
 
-==== Other Values ====
+==== FAQ: Other Values ====
 
 Like Integers, it would be hard to support Boolean/Float values; they are also a very low-value feature, and we cannot be sure of the security implications.
 
@@ -306,15 +305,17 @@ var_dump(sprintf('%.3f', 1.23)); // "1,230"
  // Pre 8.0 this also happened with string casting.
 </code>
 
-==== Other Functions ====
+==== FAQ: Other Functions ====
 
-There are a lot of candidates; for example, adding //strtoupper()// might be reasonable, but we need to consider the effect of every function, making the concept of a LiteralString more complex (e.g. //str_shuffle()// creating unpredictable results, or output varying based on the current locale).
+We made the decision to only support 4 functions that concatenated strings.
+
+There are a lot of other candidates; e.g. adding //strtoupper()// might be reasonable, however we would need to consider the effect of every function and context, making the concept of a LiteralString more complex (e.g. //str_shuffle()// creating unpredictable results, or output varying based on the current locale).
 
 The main request that's come up over the last year is to support //sprintf()//. While this is reasonable for basic concatenation (e.g. only using "%s"), it gets more complicated when coercing values to a different type, or when using formatting. That said, a future RFC might consider changing this (with the main focus being on the implications/risks).
 
-Python has a longer list of [[https://peps.python.org/pep-0675/#appendix-c-str-methods-that-preserve-literalstring|methods that preserve LiteralString]], where they found it tricky to decide what should be allowed, and this created a bit of negative feedback (some people want more functions on the list, while others wish these hadn't been included because it moves away from a simple "developer defined string").
+Python has a longer list of [[https://peps.python.org/pep-0675/#appendix-c-str-methods-that-preserve-literalstring|methods that preserve LiteralString]], where they found it tricky to decide what should be allowed, and this created a bit of negative feedback (some people want more functions on the list, while others wish these hadn't been included because it moved away from a simple "developer defined string").
 
-==== Naming ====
+==== FAQ: The Name ====
 
 A "Literal String" is the standard name for strings in source code. See [[https://www.google.com/search?q=what+is+literal+string+in+php|Google]].
 
@@ -326,47 +327,11 @@ And follows the naming convention of not using underscores for the type/object (
 
 It's also the [[https://peps.python.org/pep-0675/#rejected-names|name chosen for the Python implementation]].
 
-==== Limitations ====
+==== FAQ: Extensions ====
 
-While these values are not at risk of containing an Injection Vulnerability, they cannot be completely safe from every kind of developer/logic issue, For example:
+If an extension is found to be already using the flag we're using for LiteralString (unlikely), that's the same as any new flag being introduced into PHP, and will need to be updated in the same way. And by default, flags are off, which is a fail safe situation.
 
-<code php>
-$cli = 'rm -rf ?'; // RISKY
-$sql = 'DELETE FROM my_table WHERE my_date >= ?'; // RISKY
-</code>
-
-The parameters could be set to "/" or "0000-00-00", which can result in deleting a lot more data than expected.
-
-There's no single RFC that can completely solve all developer errors, but this takes one of the biggest ones off the table.
-
-==== Compiler Optimisations ====
-
-The implementation avoids situations that could have confused the developer:
-
-<code php>
-$one = 1;
-$a = 'A' . $one; // false, flag removed because it's being concatenated with an integer.
-$b = 'A' . 1; // Was true, as the compiler optimised this to the literal 'A1'.
-
-$a = "Hello ";
-$b = $a . 2; // Was true, as the 2 was coerced to the string '2' (to optimise the concatenation).
-
-$a = implode("-", [1, 2, 3]); // Was true with OPcache, as it could optimise this to the literal '1-2-3'
-
-$a = chr(97); // Was true, due to the use of Interned Strings.
-</code>
-
-This has been achieved by using the Lexer to mark strings as a LiteralString (i.e. earlier in the process).
-
-==== Extensions ====
-
-Extensions create and manipulate strings, but strings already have multiple flags, and these are off by default - this is the correct behaviour when extensions create their own strings (probably should not be flagged as a LiteralString). If an extension is found to be already using the flag we're using for LiteralString (unlikely), that's the same as any new flag being introduced into PHP, and will need to be updated in the same way.
-
-==== Reflection API ====
-
-The Reflection API allows you to "introspect classes, interfaces, functions, methods and extensions"; it's not currently set up for object methods to inspect the code calling it. Even if that was to be added (unlikely), it could only check if the literal value was defined there, it couldn't handle variables (tracking back to their source), nor could native functions work with this (see "Future Scope").
-
-==== Adoption ====
+==== FAQ: Adoption ====
 
 Existing libraries will probably focus on using //is_literal_string()//, as it allows them to easily choose how mistakes are handled, and //function_exists()// makes supporting PHP 8.1 and below very easy.
 
@@ -390,9 +355,9 @@ Existing libraries will probably focus on using //is_literal_string()//, as it a
 
 Both [[https://github.com/vimeo/psalm/releases/tag/4.8.0|Psalm]] and [[https://github.com/phpstan/phpstan/releases/tag/0.12.97|PHPStan]] have supported the //literal-string// type since September 2021.
 
-While I want more developers to use Static Analysis, it's highly unlikely every PHP developer will use these tools, and for all PHP code to be updated so Static Analysis can run the strictest checks, with no baseline (the [[https://www.jetbrains.com/lp/devecosystem-2021/php/|2021 JetBrains survey]], where 67% of developers used Laravel, only 33% used Static Analysis).
+While I want more developers to use Static Analysis, it's not realistic to expect that every PHP developer will use these tools, and for all PHP code to be updated so Static Analysis can run the strictest checks, with no baseline (the [[https://www.jetbrains.com/lp/devecosystem-2021/php/|2021 JetBrains survey]], where 67% of developers used Laravel, only 33% used Static Analysis).
 
-Also, it can be tricky to get current Static Analysis tools to cover every case. For example, they don't currently support [[https://stackoverflow.com/questions/71861442/php-static-analysis-and-recursive-type-checking|recursive type checking]] (in contrast, [[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/examples/sql-orm.php#L60|this is easy with a literal_check function]]).
+Also, it can be tricky to get current Static Analysis tools to cover every case. For example, they don't currently support [[https://stackoverflow.com/questions/71861442/php-static-analysis-and-recursive-type-checking|recursive type checking]]. In contrast, [[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/examples/sql-orm.php#L60|this is easy with the is_literal_string() function]].
 
 ==== Taint Checking ====
 
@@ -412,9 +377,11 @@ This is why Psalm, which supports Taint Checking, clearly notes these [[https://
 
 Developer training simply does not scale, and mistakes still happen.
 
-We cannot expect everyone to have formal training, know everything from day 1, and consider programming a full time job. We want new programmers, with a variety of experiences, ages, and backgrounds. Everyone should be guided to do the right thing, and notified as soon as they make a mistake (we all make mistakes). We also need to acknowledge that many programmers are busy, do copy/paste code, don't necessarily understand what it does, edit it for their needs, then simply move on to their next task.
+We cannot expect everyone to have formal training, know everything from Day 1, and consider programming a full time job. We want new programmers, with a variety of experiences, ages, and backgrounds. Everyone should be guided to do the right thing, and notified as soon as they make a mistake (we all make mistakes). We also need to acknowledge that many programmers are busy, do copy/paste code, don't necessarily understand what it does, edit it for their needs, then simply move on to their next task.
 
 ===== Other Programming Languages =====
+
+Similar concepts implemented in other programming languages:
 
 **Python** can use the [[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/others/python/main.py|LiteralString]] type in 3.11 ([[https://eiv.dev/python-pyre/|pyre example]], via [[https://peps.python.org/pep-0675/|PEP 675]]).
 
@@ -447,7 +414,7 @@ And there is the [[https://wiki.php.net/rfc/sql_injection_protection|Automatic S
 
 Last year I wrote the [[https://wiki.php.net/rfc/is_literal|is_literal() RFC]], where the feedback was:
 
-  * "Ideally we would want to assign a variable to be of 'literal' type." [[https://externals.io/message/115306#115308|George P. Banyard]] (yep, done).
+  * "Ideally we would want to assign a variable to be of 'literal' type." [[https://externals.io/message/115306#115308|George P. Banyard]] (covered by this RFC).
   * "There is good progress in taint analysis" [[https://externals.io/message/115306#115455|Marco Pivetta]] (see the flaws noted with Taint Analysis above).
   * "I would like the ecosystem to pick up static analysis more" [[https://externals.io/message/115306#115455|Marco Pivetta]] (I do too, but I doubt we can get everyone using it all the time, at the strictest levels, and no baseline).
   * "the concatenation operation is basically kicking the can down the road [...] using a function like concat_literal() [...] provides immediate feedback" [[https://externals.io/message/115306#115308|George P. Banyard]] and "[literal_concat() makes] it easy to track down issues where they occur" [[https://externals.io/message/115306#115387|Dan Ackroyd]] (I've not found this to be the case, but re-writing all code to not use concatenation is a big change).
@@ -460,6 +427,21 @@ Last year I wrote the [[https://wiki.php.net/rfc/is_literal|is_literal() RFC]], 
   * "in the real world, you're going to start seeing cases where something is "literal enough", but doesn't pass the is_literal test" (examples were asked for, but no response).
 
 I also agree with [[https://news-web.php.net/php.internals/87400|Scott Arciszewski]], "SQL injection is almost a solved problem [by using] prepared statements", where LiteralString identifies when user input is accidentally included in the SQL string.
+
+On a technical note, the implementation avoids situations that could have confused the developer, by using the Lexer to mark strings as a LiteralString (i.e. earlier in the process):
+
+<code php>
+$one = 1;
+$a = 'A' . $one; // false, flag removed because it's being concatenated with an integer.
+$b = 'A' . 1; // Was true, as the compiler optimised this to the literal 'A1'.
+
+$a = "Hello ";
+$b = $a . 2; // Was true, as the 2 was coerced to the string '2' (to optimise the concatenation).
+
+$a = implode("-", [1, 2, 3]); // Was true with OPcache, as it could optimise this to the literal '1-2-3'
+
+$a = chr(97); // Was true, due to the use of Interned Strings.
+</code>
 
 ===== Backward Incompatible Changes =====
 
@@ -508,7 +490,7 @@ Accept the RFC
 
 ===== Implementation =====
 
-[[https://github.com/php/php-src/compare/master...krakjoe:literals|Joe Watkin's implementation]] which implemented //is_literal()// and would need to be updated to support the LiteralString native type, and re-name the function to //is_literal_string()//.
+[[https://github.com/php/php-src/compare/master...krakjoe:literals|Joe Watkin's implementation]] provides //is_literal()//, but will need to be updated to support the LiteralString native type, and re-name the function to //is_literal_string()//.
 
 ===== Rejected Features =====
 
@@ -518,11 +500,11 @@ Accept the RFC
 
   - **Joe Watkins**, krakjoe, for writing the full implementation, including support for concatenation and integers, and helping me though the RFC process.
   - **Máté Kocsis**, mate-kocsis, for setting up and doing the performance testing.
-  - **Scott Arciszewski**, CiPHPerCoder, for checking over the RFC, and provided text on how we could implement integer support under a //is_noble()// name.
+  - **Scott Arciszewski**, CiPHPerCoder, for checking over the original RFC, and provided text on how we could implement integer support under a //is_noble()// name.
   - **Dan Ackroyd**, DanAck, for starting the [[https://github.com/php/php-src/compare/master...Danack:is_literal_attempt_two|first implementation]], which made this a reality, providing //literal_concat()// and //literal_implode()//, and followup on how it should work.
   - **Xinchen Hui**, who created the Taint Extension, allowing me to test the idea; and noting how Taint in PHP5 was complex, but "with PHP7's new zend_string, and string flags, the implementation will become easier" [[https://news-web.php.net/php.internals/87396|source]].
   - **Rowan Francis**, for proof-reading, and helping me make an RFC that contains readable English.
-  - **Rowan Tommins**, IMSoP, for re-writing this RFC to focus on the key features, and putting it in context of how it can be used by libraries.
+  - **Rowan Tommins**, IMSoP, for helping with the original RFC, focusing on the key features, and put it in context of how it can be used by libraries.
   - **Nikita Popov**, NikiC, for suggesting where the flag could be stored. Initially this was going to be the "GC_PROTECTED flag for strings", which allowed Dan to start the first implementation.
   - **Mark Randall**, MarkR, for suggestions, and noting that "interned strings in PHP have a flag", which started the conversation on how this could be implemented.
-  - **Sara Golemon**, SaraMG, for noting how this RFC had to explain how //is_literal()// is different to the flawed Taint Checking approach, so we don't get "a false sense of security or require far too much escape hatching".
+  - **Sara Golemon**, SaraMG, for noting that I'd need to explain how //is_literal()// is different to the flawed Taint Checking approach, so we don't get "a false sense of security or require far too much escape hatching".
