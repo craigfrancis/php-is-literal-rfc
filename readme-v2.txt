@@ -24,24 +24,28 @@ This technique is used at Google (as described in "Building Secure and Reliable 
 
 Injection and Cross-Site Scripting (XSS) vulnerabilities are **easy to make**, **hard to identify**, and **very common**.
 
-With SQL Injection, it often takes a single mistake for the attacker to read everything in the database (SQL Map, Havij, jSQL, etc) [[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/mistakes.php|Examples ]].
-
 <code php>
 $qb->select('u')
    ->from('User', 'u')
-   ->where('u.type_id = ' . $_GET['type']) // INSECURE
-   ->orderBy($_GET['sort'], 'ASC') // INSECURE
+   ->where('u.id = ?1')
+   ->setParameter(1, $_GET['id']); // Correct
+
+$qb->select('u')
+   ->from('User', 'u')
+   ->where('u.id = ' . $_GET['id']); // INSECURE, but easier to write/read :-)
 
 $qb->select('u')
     ->from('User', 'u')
     ->where($qb->expr()->andX(
-        $qb->expr()->eq('u.id', $_GET['id']), // INSECURE
-        $qb->expr()->eq('u.type_id', 1),
-    ))
+        $qb->expr()->eq('u.type_id', $_GET['type']), // INSECURE, 'u.type_id) OR (1 = 1'
+        $qb->expr()->isNull('u.deleted'), // Is ignored due to 'OR'
+    ));
 
 DB::table('user')->whereRaw('CONCAT(name_first, " ", name_last) LIKE "' . $search . '%"');
 DB::table('user')->whereRaw('CONCAT(name_first, " ", name_last) LIKE ?', $search . '%'); // INSECURE
 </code>
+
+[[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/mistakes.php|Additional Examples]], and see tools such as SQL Map, Havij, jSQL, etc.
 
 In the latest [[https://owasp.org/www-project-top-ten/|OWASP Top 10]], Injection Vulnerabilities rank third highest security risk to web applications (database abstractions have at least helped move them from the top spot, but do not solve the problem).
 
@@ -147,7 +151,7 @@ $url    = substr('https://example.com/js/a.js?v=55', 0, $length);
 $html   = substr('<a href="#">#</a>', 0, $length);
 </code>
 
-If $url was used in a Content-Security-Policy, the query string needs to be removed, but as more of the string is removed, the more resources are allowed ("https:" basically allows resources from anywhere). With the HTML example, moving from the tag content to the attribute can be a problem (technically the HTML Templating Engine should be fine, but unfortunately libraries like Twig are not currently context aware, so you need to change from the default 'html' encoding to 'html_attr' encoding).
+If $url was used in a Content-Security-Policy, the query string needs to be removed, but as more of the string is removed, the more resources are allowed ("https:" basically allows resources from anywhere). With the HTML example, moving from the tag content to the attribute can be a problem (while HTML Templating Engines should be fine, unfortunately libraries like Twig are not currently context aware, so you need to change from the default 'html' encoding to 'html_attr' encoding).
 
 Krzysztof Kotowicz has confirmed that, at Google, with "go-safe-html", string concatenation is allowed, but splitting is **explicitly** not supported because it "can cause issues"; for example, "arbitrary split position of a HTML string can change the context".
 
