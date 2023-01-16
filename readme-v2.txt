@@ -25,6 +25,7 @@ This technique is used at Google (as described in "Building Secure and Reliable 
 Injection and Cross-Site Scripting (XSS) vulnerabilities are **easy to make**, **hard to identify**, and **very common**.
 
 <code php>
+// Doctrine
 $qb->select('u')
    ->from('User', 'u')
    ->where('u.id = ?1')
@@ -41,11 +42,12 @@ $qb->select('u')
         $qb->expr()->isNull('u.deleted'), // Is ignored due to 'OR'
     ));
 
+// Laravel
 DB::table('user')->whereRaw('CONCAT(name_first, " ", name_last) LIKE "' . $search . '%"');
 DB::table('user')->whereRaw('CONCAT(name_first, " ", name_last) LIKE ?', $search . '%'); // INSECURE
 </code>
 
-[[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/mistakes.php|Additional Examples]], and see tools such as SQL Map, Havij, jSQL, etc.
+[[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/mistakes.php|Additional Examples]]; where tools (e.g. SQL Map, Havij, jSQL) make it easy to exploit these mistakes.
 
 In the latest [[https://owasp.org/www-project-top-ten/|OWASP Top 10]], Injection Vulnerabilities rank third highest security risk to web applications (database abstractions have at least helped move them from the top spot, but do not solve the problem).
 
@@ -113,13 +115,13 @@ You can test it at [[https://3v4l.org/#vrfc.literals|3v4l.org]] using the previo
 
 ==== Performance ====
 
-Máté Kocsis created a [[https://github.com/kocsismate/php-version-benchmarks/|PHP benchmark]] to replicate the old [[https://01.org/node/3774|Intel Tests]]. The results for the implementation found a 0.47% impact with the Symfony demo app, where it did not connect to a database (because the natural variability introduced by that makes it impossible to measure an impact that small).
+Máté Kocsis created a [[https://github.com/kocsismate/php-version-benchmarks/|PHP benchmark]] to replicate the old [[https://01.org/node/3774|Intel Tests]]. The results for the implementation found a 0.47% impact with the Symfony demo app, where it did not connect to a database (because the natural variability introduced by a database makes it impossible to measure an impact that small).
 
 ==== String Concatenation ====
 
 When two LiteralString values are concatenated, the result is also a LiteralString.
 
-Some people may believe that not supporting concatenation might help debugging, with the thought being, in a long complex script, which only checks if a variable is a LiteralString at the end, it's harder to identify the source of the problem. However, over the last year I've simply not found this to be the case, and it would be nigh-on-impossible to update every library and all existing code to not use concatenation (e.g. to use a query builder). That said, someone who really wants this strict way of working could use:
+Some people may believe that not supporting concatenation might help debugging, with the thought being, in a long complex script, which only checks if a variable is a LiteralString at the end, it's harder to identify the source of the problem. However, over the last year I've simply not found this to be the case (usual debug techniques work fine), whereas it would be nigh-on-impossible to update every library and all existing code to not use concatenation (e.g. to use a query builder). That said, someone who really wants this strict way of working could use:
 
 <code php>
 function literal_implode($separator, $array) {
@@ -179,7 +181,7 @@ for ($k = 1; $k < $count; $k++) {
 Libraries can also abstract this for the developer, e.g. WordPress should support the following in the future ([[https://core.trac.wordpress.org/ticket/54042|#54042]]):
 
 <code php>
-$wpdb->prepare('SELECT * FROM table WHERE id IN (%...d)', $ids)
+$wpdb->prepare('SELECT * FROM table WHERE id IN (%...d)', $ids);
 </code>
 
 ==== FAQ: Non-Parameterised Values ====
@@ -498,7 +500,7 @@ Accept the RFC
 
 ===== Rejected Features =====
 
-  - [[#integer_values|Supporting Integers]]
+  - [[#faqinteger_values|Supporting Integers]]
 
 ===== Thanks =====
 
