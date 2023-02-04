@@ -83,8 +83,17 @@ $b = 'World';
 is_literal_string('Example'); // true
 is_literal_string($a); // true
 is_literal_string($_GET['id']); // false
+```
 
+```php
 function example1(LiteralString $input) {
+  return $input;
+}
+
+function example2(String $input) {
+  if (!is_literal_string($input)) {
+    error_log('Log issue, but still continue.');
+  }
   return $input;
 }
 
@@ -97,20 +106,50 @@ example1($_GET['id']); // TypeError
 example1('/bin/rm -rf ' . $_GET['path']); // TypeError
 example1('<img src=' . $_GET['src'] . ' />'); // TypeError
 example1('WHERE id = ' . $_GET['id']); // TypeError
-
-function example2(String $input) {
-  if (function_exists('is_literal_string') && !is_literal_string($input)) {
-    error_log('Log issue, but still continue.');
-  }
-  return $input;
-}
 ```
 
-Most libraries will probably use something like `example2()` to test the values they receive, partially for backwards compatibility reasons, but also because it allows them to easily choose how mistakes are handled. For example, I would suggest libraries used logged warnings by default, with an option to throw exceptions for those developers who are confident their code is ready or when it's in development mode, or they could provide a way to disable checks on a per query basis, or entirely for legacy projects ([example](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/example.php?ts=4)).
+Most libraries will probably use something like `example2()` to test the values they receive, partially for backwards compatibility reasons (can use `function_exists`), but also because it allows them to easily choose how mistakes are handled. For example, I would suggest libraries used logged warnings by default, with an option to throw exceptions for those developers who are confident their code is ready or when it's in development mode, or they could provide a way to disable checks on a per query basis, or entirely for legacy projects ([example](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/example.php?ts=4)).
 
 Libraries could also check their output (e.g. SQL to a database) is still a LiteralString, but this isn't a priority (libraries are rarely the source of Injection Vulnerabilities, it's usually the developer using them incorrectly).
 
 You can test it at [3v4l.org](https://3v4l.org/#vrfc.literals) using the previous "is_literal()" function name.
+
+```php
+class sqli_protected_db {
+  private $db;
+  public function __construct() {
+    $this->db = new mysqli('localhost', 'username', 'password', 'database');
+  }
+  public function query(LiteralString $sql, Array $parameters = [], Array $aliases = []) {
+    foreach ($aliases as $name => $value) {
+      $sql = str_replace('{' . $name . '}', '`' . str_replace('`', '``', $value) . '`', $sql);
+    }
+    print_r($sql . "\n");
+    print_r(iterator_to_array($this->db->execute_query($sql, $parameters)));
+  }
+}
+
+$db = new sqli_protected_db();
+
+$db->query('SELECT name FROM user WHERE id = ?', [$_GET['id']]);
+$db->query('SELECT name FROM user WHERE id = ' . $_GET['id']); // TypeError
+
+$db->query('SELECT name FROM user ORDER BY {order}', [], ['order' => $_GET['order']]);
+$db->query('SELECT name FROM user ORDER BY ' . $_GET['order']); // TypeError
+```
+
+```php
+class query_builder {
+  public function where(LiteralString $column, ?LiteralString $operator = null, $value = null) {
+    print_r($column . ' ' . $operator . ' ?' . "\n");
+  }
+}
+
+$qb = new query_builder();
+
+$qb->where('CONCAT(name_first, " ", name_last)', 'LIKE', $_GET['name']);
+$qb->where($_GET['field'], '=', $_GET['value']); // TypeError
+```
 
 ## Considerations
 
@@ -202,7 +241,7 @@ $fields = [
 
 $order_id = array_search($sort, $fields);
 
-$sql .= ' ORDER BY ' . $fields[$order_id];
+$sql .= ' ORDER BY ' . $fields[$order_id]; // A LiteralString
 ```
 
 Or, you could use:
@@ -214,7 +253,7 @@ $fields = [
     'created' => 'DATE(u.created)',
   ];
 
-$sql = 'ORDER BY ' . ($fields[$sort] ?? 'u.full_name');
+$sql .= ' ORDER BY ' . ($fields[$sort] ?? 'u.full_name'); // A LiteralString
 ```
 
 There may be some exceptions, see the next section.
@@ -237,7 +276,7 @@ $sql = "
   FROM
     {my_table} AS t
   WHERE
-    t.id = ?"; // The LiteralString
+    t.id = ?"; // A LiteralString
 
 $parameters = [
     $_GET['id'],
@@ -250,7 +289,7 @@ $identifiers = [
 $results = $db->query($sql, $parameters, $identifiers);
 ```
 
-And WordPress 6.2 should support ([#52506](https://core.trac.wordpress.org/ticket/52506)):
+And WordPress 6.2 is scheduled to support ([#52506](https://core.trac.wordpress.org/ticket/52506)):
 
 ```php
 $wpdb->prepare('SELECT * FROM %i', $table_name);

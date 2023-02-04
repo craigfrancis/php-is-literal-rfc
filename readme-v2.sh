@@ -15,6 +15,8 @@ cat "readme-v2.md" \
   | perl -pe 's/\[\[([^\|]+)\|\1\]\]/\1/g' \
   | perl -0pe 's{^(.*)\R\|( *-+ *\|)+$\R?}{$1 =~ s,\|,^,gr}gme' \
   | sed -E -e '1h;2,$H;$!d;g' -e 's/(\nhttp[^ ]+)  (\nhttp)/\1\\\\\2/g' \
+  | perl -pe "s/'\/\/'/'\`'/g" \
+  | perl -pe "s/'\/\/\/\/'/'\`\`'/g" \
   > readme-v2.txt;
 
 # cat "readme-v2.txt" \
