@@ -9,7 +9,7 @@
 * Contributors: Joe Watkins, Máté Kocsis
 * Status: Draft
 * First Published at: https://wiki.php.net/rfc/literal_string
-* GitHub Repo: https://github.com/craigfrancis/php-is-literal-rfc/readme-v2.md
+* GitHub Repo: https://github.com/craigfrancis/php-is-literal-rfc/blob/main/readme-v2.md
 * Implementation: https://github.com/php/php-src/compare/master...krakjoe:literals
 
 ## Introduction
@@ -112,7 +112,7 @@ Most libraries will probably use something like `example2()` to test the values 
 
 Libraries could also check their output (e.g. SQL to a database) is still a LiteralString, but this isn't a priority (libraries are rarely the source of Injection Vulnerabilities, it's usually the developer using them incorrectly).
 
-You can test it at [3v4l.org](https://3v4l.org/#vrfc.literals) using the previous "is_literal()" function name.
+You can test it at [3v4l.org](https://3v4l.org/sLmC9/rfc#vrfc.literals) using the previous "is_literal()" function name.
 
 ```php
 class sqli_protected_db {
@@ -319,7 +319,7 @@ function example1(LiteralString|UnsafeSQL $input) {
 }
 
 function example2($input) {
-  if (!is_literal_string($input) || $input instanceof UnsafeSQL) {
+  if (!is_literal_string($input) && !($input instanceof UnsafeSQL)) {
     error_log('Log issue, but still continue.');
   }
   return $input;
@@ -379,7 +379,7 @@ If an extension is found to be already using the flag we're using for LiteralStr
 
 ### FAQ: Adoption
 
-Existing libraries will probably focus on using `is_literal_string()`, as it allows them to easily choose how mistakes are handled, and `function_exists()` makes supporting PHP 8.1 and below very easy.
+Existing libraries will probably focus on using `is_literal_string()`, as it allows them to easily choose how mistakes are handled, and `function_exists()` makes supporting PHP 8.2 and below very easy.
 
 **WordPress**: After adding support for escaping field/table names (identifiers) with `%i` ([#52506](https://core.trac.wordpress.org/ticket/52506)), and to make `IN (?,?,?)` easier with `%...d` ([#54042](https://core.trac.wordpress.org/ticket/54042)), a LiteralString check will be added to the `$query` parameter in `wpdb::prepare()`.
 
@@ -495,7 +495,7 @@ No known BC breaks, except for existing code that contains the userland function
 
 ## Proposed PHP Version(s)
 
-PHP 8.1
+PHP 8.3
 
 ## RFC Impact
 
