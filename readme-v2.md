@@ -401,9 +401,9 @@ Existing libraries will probably focus on using `is_literal_string()`, as it all
 
 Both [Psalm](https://github.com/vimeo/psalm/releases/tag/4.8.0) and [PHPStan](https://github.com/phpstan/phpstan/releases/tag/0.12.97) have supported the `literal-string` type since September 2021.
 
-While I want more developers to use Static Analysis, it's not realistic to expect that every PHP developer will use these tools, and for all PHP code to be updated so Static Analysis can run the strictest checks, with no baseline (the [2021 JetBrains survey](https://www.jetbrains.com/lp/devecosystem-2021/php/), where 67% of developers used Laravel, only 33% used Static Analysis).
+While I want more developers to use Static Analysis, it's not realistic to expect all PHP developers to always use these tools, and for all PHP code to be updated so Static Analysis can run the strictest checks, and use no baseline (using the JetBrains surveys; in [2021](https://www.jetbrains.com/lp/devecosystem-2021/php/#PHP_do-you-use-static-analysis) only 33% used Static Analysis; and [2022](https://www.jetbrains.com/lp/devecosystem-2022/php/#what-additional-quality-tools-do-you-use-regularly-if-any-) shows a similar story with 33% (at best) using PHPStan/Psalm/Phan; where the selected developers for both surveys are 3 times more likely to use Laravel than WordPress).
 
-Also, it can be tricky to get current Static Analysis tools to cover every case. For example, they don't currently support [recursive type checking](https://stackoverflow.com/questions/71861442/php-static-analysis-and-recursive-type-checking). In contrast, [this is easy with the is_literal_string() function](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/examples/sql-orm.php#L60).
+Also, it can be tricky to get current Static Analysis tools to cover every case. For example, they don't currently support [recursive type checking](https://stackoverflow.com/questions/71861442/php-static-analysis-and-recursive-type-checking), or [get a value-object to conditionally return a type](https://stackoverflow.com/questions/72231302/phpstan-extension-dynamic-return-types-with-value-objects). In contrast, both are [easy with the is_literal_string() function](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/examples/sql-orm.php#L60).
 
 ### Taint Checking
 
