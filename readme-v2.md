@@ -18,7 +18,7 @@ Add `LiteralString` type, and `is_literal_string()`, to check that a variable co
 
 This ensures the value cannot be a source of an Injection Vulnerability, because it does not contain user input.
 
-This technique is used at Google (as described in "Building Secure and Reliable Systems", see [Common Security Vulnerabilities, pages 251-255](https://static.googleusercontent.com/media/sre.google/en//static/pdf/building_secure_and_reliable_systems.pdf#page=287), which shows how "developer-controlled input" prevents these issues in Go); it's used by FaceBook developers (ref [pyre type-checker](https://eiv.dev/python-pyre/), which has been added to Python 3.11 via [PEP 675](https://peps.python.org/pep-0675/)); and Christoph Kern discussed it in 2016 with [Preventing Security Bugs through Software Design](https://www.youtube.com/watch?v=ccfEu-Jj0as). Also explained at [USENIX Security 2015](https://www.usenix.org/conference/usenixsecurity15/symposium-program/presentation/kern), [OWASP AppSec US 2021](https://www.youtube.com/watch?v=06_suQAAfBc), and summarised at [eiv.dev](https://eiv.dev/).
+This technique is used at Google (as described in "Building Secure and Reliable Systems", see [Common Security Vulnerabilities, pages 251-255](https://static.googleusercontent.com/media/sre.google/en//static/pdf/building_secure_and_reliable_systems.pdf#page=287), which shows how "developer-controlled input" prevents these issues in Go); it's used by FaceBook developers (ref [pyre type-checker](https://eiv.dev/python-pyre/), where the **LiteralString** type has been added to Python 3.11 via [PEP 675](https://peps.python.org/pep-0675/)); and Christoph Kern discussed it in 2016 with [Preventing Security Bugs through Software Design](https://www.youtube.com/watch?v=ccfEu-Jj0as). Also explained at [USENIX Security 2015](https://www.usenix.org/conference/usenixsecurity15/symposium-program/presentation/kern), [OWASP AppSec US 2021](https://www.youtube.com/watch?v=06_suQAAfBc), and summarised at [eiv.dev](https://eiv.dev/).
 
 ## The Problem
 
@@ -43,8 +43,8 @@ $qb->select('u')
     ));
 
 // Laravel
-DB::table('user')->whereRaw('CONCAT(name_first, " ", name_last) LIKE "' . $search . '%"');
-DB::table('user')->whereRaw('CONCAT(name_first, " ", name_last) LIKE ?', $search . '%'); // INSECURE
+DB::table('user')->whereRaw('CONCAT(name_first, " ", name_last) LIKE ?', $search . '%');
+DB::table('user')->whereRaw('CONCAT(name_first, " ", name_last) LIKE "' . $search . '%"'); // INSECURE
 ```
 
 [Additional Examples](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/mistakes.php); where tools (e.g. SQL Map, Havij, jSQL) make it easy to exploit these mistakes.
