@@ -161,7 +161,7 @@ Máté Kocsis created a [PHP benchmark](https://github.com/kocsismate/php-versio
 
 When two LiteralString values are concatenated, the result is also a LiteralString.
 
-Some people may believe that not supporting concatenation might help debugging, with the thought being, in a long complex script, which only checks if a variable is a LiteralString at the end, it's harder to identify the source of the problem. However, over the last year I've simply not found this to be the case (usual debug techniques work fine), whereas it would be nigh-on-impossible to update every library and all existing code to not use concatenation (e.g. to use a query builder). That said, someone who really wants this strict way of working could use:
+It's been suggested that not supporting concatenation might help debugging, with the thought being, in a long complex script, which only checks if a variable is a LiteralString at the end, it's harder to identify the source of the problem. However, over the last year the feedback has been that the usual debug techniques work fine (if anything, developers want sprintf support); whereas it would be nigh-on-impossible to update every library and all existing code to not use concatenation (e.g. to use a query builder). That said, someone who really wants this strict way of working could use:
 
 ```php
 function literal_implode($separator, $array) {
