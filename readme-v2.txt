@@ -395,13 +395,13 @@ But the library has no idea when a programmer does something like:
 ->field_add('LEFT(ref, (LENGTH(ref) - ' . $_GET['cut'] . '))') // INSECURE
 </code>
 
-While a LiteralString check would easily identify these mistakes; an alternative approach would be to replace these simple strings with abstractions, where every part is represented by an object, and the individual parts are checked or quoted as appropriate; for example:
+While a LiteralString check would easily identify these mistakes; an alternative approach would be to replace these simple strings with abstractions, where the parts are either represented by an object, or are checked/quoted as appropriate; for example:
 
 <code php>
 ->field_add(new Func('LEFT', 'ref', new Calc(new Func('LENGTH', 'ref'), '-', new Value(3))))
 </code>
 
-I'm fairly sure this won't be adopted by many programmers, as it's too difficult to write (and later read); in the same way they are much more likely to use //DOMDocument::loadHTML()// than add every element via //DOMDocument::createElement()//, //DOMDocument::createAttribute()//, etc.
+I'm fairly sure this won't be adopted by many programmers, as it's too difficult to write (and later read); in the same way they are much more likely to use //DOMDocument::loadHTML()// rather than add every element via //DOMDocument::createElement()//, //DOMDocument::createAttribute()//, etc.
 
 ==== Education ====
 
