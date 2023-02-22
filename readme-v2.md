@@ -344,19 +344,21 @@ If an extension is found to be already using the flag we're using for LiteralStr
 
 Existing libraries will probably focus on using `is_literal_string()`, as it allows them to easily choose how mistakes are handled, and `function_exists()` makes supporting PHP 8.2 and below very easy.
 
+**Psalm** (Matthew Brown): 13th June 2021 "I was skeptical about the first draft of this RFC when I saw it last month, but now I see the light (especially with the concat changes)". Then on the 14th June, "I've just added support for a `literal-string` type to Psalm: https://psalm.dev/r/9440908f39" ([4.8.0](https://github.com/vimeo/psalm/releases/tag/4.8.0))
+
+**PHPStan** (Ondřej Mirtes): 1st September 2021, has been implemented in [0.12.97](https://github.com/phpstan/phpstan/releases/tag/0.12.97).
+
+**PhpStorm**: 2022.3 recognises the `literal-string` type ([WI-64109](https://youtrack.jetbrains.com/issue/WI-64109/literal-string-support-in-phpdoc)).
+
 **WordPress**: After adding support for escaping field/table names (identifiers) with `%i` ([#52506](https://core.trac.wordpress.org/ticket/52506)), and to make `IN (?,?,?)` easier with `%...d` ([#54042](https://core.trac.wordpress.org/ticket/54042)), a LiteralString check will be added to the `$query` parameter in `wpdb::prepare()`.
+
+**Nettle** (David Grudl): "the literal-string type [is used] with nette/database" ([patch](https://github.com/nette/database/commit/fb2476b2f7937053a99d30b53c7e5731f6f7b96c)).
 
 **Doctrine**: While not part of the official Doctrine project, the [phpstan-doctrine](https://github.com/phpstan/phpstan-doctrine) extension adds experimental support via bleedingEdge (will probably use a separate flag in the future).
 
 **Propel** (Mark Scherer): "given that this would help to more safely work with user input, I think this syntax would really help in Propel." ([example](https://github.com/propelorm/Propel2/pull/1788/files)).
 
 **RedBean** (Gabor de Mooij): "You can list RedBeanPHP as a supporter, we will implement this into the core." ([example](https://github.com/gabordemooij/redbean/pull/873/files)).
-
-**PhpStorm**: 2022.3 recognises the `literal-string` type ([WI-64109](https://youtrack.jetbrains.com/issue/WI-64109/literal-string-support-in-phpdoc)).
-
-**Psalm** (Matthew Brown): 13th June 2021 "I was skeptical about the first draft of this RFC when I saw it last month, but now I see the light (especially with the concat changes)". Then on the 14th June, "I've just added support for a `literal-string` type to Psalm: https://psalm.dev/r/9440908f39" ([4.8.0](https://github.com/vimeo/psalm/releases/tag/4.8.0))
-
-**PHPStan** (Ondřej Mirtes): 1st September 2021, has been implemented in [0.12.97](https://github.com/phpstan/phpstan/releases/tag/0.12.97).
 
 ## Alternatives
 
