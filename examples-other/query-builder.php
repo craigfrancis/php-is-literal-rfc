@@ -17,11 +17,19 @@ class Value {
 
 class Field {
 	private ?string $value = NULL;
-	public function __construct(string $value) {
+	private ?Field $as = NULL;
+	public function __construct(string $value, string $as = NULL) {
 		$this->value = $value;
+		if ($as !== NULL) {
+			$this->as_set($as);
+		}
+	}
+	public function as_set(string $as): self {
+		$this->as = new Field($as);
+		return $this;
 	}
 	public function __toString(): string {
-		return '`' . str_replace('`', '``', (string)$this->value) . '`';
+		return '`' . str_replace('`', '``', (string)$this->value) . '`' . ($this->as ? ' AS ' . $this->as : '');
 	}
 }
 
@@ -30,6 +38,7 @@ class Table extends Field {
 
 class Func {
 	private ?string $name = NULL;
+	private ?Field $as = NULL;
 	/**
 	 * @var array<int|string, string|Field|Value|SubQuery|Calc> $args
 	 */
@@ -44,6 +53,10 @@ class Func {
 		$this->name = $name;
 		$this->args = $args;
 	}
+	public function as_set(string $as): self {
+		$this->as = new Field($as);
+		return $this;
+	}
 	public function __toString(): string {
 		$sql = [];
 		if ($this->name == 'COUNT' && count($this->args) === 1 && reset($this->args) === '*') {
@@ -56,7 +69,7 @@ class Func {
 				$sql[] = $arg->__toString();
 			}
 		}
-		return strval($this->name) . '(' . implode(', ', $sql) . ')';
+		return strval($this->name) . '(' . implode(', ', $sql) . ')' . ($this->as ? ' AS ' . $this->as : '');
 	}
 }
 
@@ -117,6 +130,18 @@ class Statement {
 			$as = ' AS ' . $as;
 		}
 		$this->fields[] = $field . ($as ?? '');
+		return $this;
+	}
+	/**
+	 * @param string|Field|Func|Calc|SubQuery|Statement $fields
+	 */
+	public function fields_set(...$fields): self {
+		foreach ($fields as $id => $field) {
+			if (!($field instanceof Field) && !($field instanceof Func) && !($field instanceof Calc) && !($field instanceof SubQuery) && !($field instanceof Statement)) {
+				$fields[$id] = new Field($field);
+			}
+		}
+		$this->fields = $fields;
 		return $this;
 	}
 	public function from_set(string|Table $table): self {
@@ -201,6 +226,25 @@ class SubQuery extends Statement {
 // WHERE
 // 	`id` = ? AND
 // 	`deleted` IS NULL;
+
+//--------------------------------------------------
+
+$id = 1;
+
+$statement = (new Statement('SELECT'))
+	->fields_set(
+		'id',
+		'ref',
+		(new Func('IFNULL', 'type', new Value('N/A')))->as_set('type'),
+		(new Func('LEFT', 'ref', new Calc(new Func('LENGTH', 'ref'), '-', new Value(3))))->as_set('ref_short'),
+	)
+	->from_set('assessment')
+	->where_add('id', '=', $id)
+	->where_add('deleted', 'IS NULL');
+
+$statement->execute();
+
+//--------------------------------------------------
 
 $id = 1;
 
