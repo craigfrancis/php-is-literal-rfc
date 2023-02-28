@@ -65,4 +65,13 @@ echo "\n--------------------------------------------------\n\n";
 	$example = new example();
 	$example->test();
 
+
+echo "\n--------------------------------------------------\n\n";
+
+
+	var_dump(is_literal(implode(' ', ['']))); // Fine
+
+	var_dump(is_literal(implode(' ', []))); // Not?
+
+
 ?>
