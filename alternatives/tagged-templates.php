@@ -35,10 +35,10 @@
 		$name = ($_GET['name'] ?? '');
 		if ($name) {
 
+			$parameters[] = '%' . $name . '%';
+
 			$where_sql .= ' AND
 				u.name LIKE ?';
-
-			$parameters[] = '%' . $name . '%';
 
 		}
 
@@ -55,19 +55,19 @@
 
 	//--------------------------------------------------
 
+		$identifiers['o'] = ($_GET['sort'] ?? 'email');
+
 		$sql .= '
 			ORDER BY
 				{o}';
 
-		$identifiers['o'] = ($_GET['sort'] ?? 'email');
-
 	//--------------------------------------------------
+
+		$parameters[] = intval($_GET['page'] ?? 0);
 
 		$sql .= '
 			LIMIT
 				?, 10';
-
-		$parameters[] = intval($_GET['page'] ?? 0);
 
 	//--------------------------------------------------
 
