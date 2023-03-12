@@ -5,72 +5,81 @@
 
 	$qb->select('u')
 		->from('User', 'u')
-		->where(```u.id = ?1```)
+		->where('u.id = ?1')
 		->setParameter(1, $_GET['id']);
 
 	$qb->select('u')
 		->from('User', 'u')
 		->where($qb->expr()->andX(
-			$qb->expr()->eq(```u.type_id```, ```?1```),
-			$qb->expr()->isNull(```u.deleted```),
+			$qb->expr()->eq('u.type_id', '?1'),
+			$qb->expr()->isNull('u.deleted'),
 		))
 		->setParameter(1, $_GET['type_id']);
 
 //--------------------------------------------------
 // Laravel
 
-	DB::table('user')->whereRaw(```CONCAT(name_first, " ", name_last) LIKE ?```, $search . '%');
+	DB::table('user')->whereRaw('CONCAT(name_first, " ", name_last) LIKE ?', $search . '%');
 
 //--------------------------------------------------
 // Plain SQL
 
 	//--------------------------------------------------
 
-		$where_sql = ```u.deleted IS NULL```;
+		$where_sql = 'true';
+		$parameters = [];
+		$identifiers = [];
+
+	//--------------------------------------------------
+
+		$archive = (intval($_GET['archive'] ?? 0) === 1);
+
+		$where_sql .= ' AND
+				u.deleted ' . ($archive ? 'IS NOT NULL' : 'IS NULL');
 
 	//--------------------------------------------------
 
 		$name = ($_GET['name'] ?? '');
 		if ($name) {
 
-			$name_wildcard = '%' . $name . '%';
+			$parameters[] = '%' . $name . '%';
 
-			$where_sql .= ``` AND
-				u.name LIKE $name_wildcard```;
+			$where_sql .= ' AND
+				u.name LIKE ?';
 
 		}
 
 	//--------------------------------------------------
 
-		$sql = ```
+		$sql = '
 			SELECT
 				u.name,
 				u.email
 			FROM
 				user AS u
 			WHERE
-				``` . $where_sql;
+				' . $where_sql;
 
 	//--------------------------------------------------
 
-		$order = new Identifier($_GET['sort'] ?? 'email');
+		$identifiers['o'] = ($_GET['sort'] ?? 'email');
 
-		$sql .= ```
+		$sql .= '
 			ORDER BY
-				$order```;
+				{o}';
 
 	//--------------------------------------------------
 
-		$page = intval($_GET['page'] ?? 0);
+		$parameters[] = intval($_GET['page'] ?? 0);
 
-		$sql .= ```
+		$sql .= '
 			LIMIT
-				$page, 10```;
+				?, 10';
 
 	//--------------------------------------------------
 
-		print_r($sql);
+		print_r([$sql, $parameters, $identifiers]);
 
-		// $db->query($sql);
+		// $db->query($sql, $parameters, $identifiers);
 
 ?>
