@@ -430,7 +430,7 @@ var id = 123,
 console.log(sql);
 ```
 
-PHP cannot use ```\```` (execute shell command), but could use ```\`\`\```` (not ideal for MarkDown, e.g. documentation).
+PHP cannot use ``` ` ``` (execute shell command), but could use ```` ``` ```` (not ideal for MarkDown, e.g. documentation).
 
 Instead of calling a function directly, PHP could create a `TemplateLiteral` object, providing methods like `getStringParts()` and `getValues()`, so the object can be passed to a library to check and use.
 
