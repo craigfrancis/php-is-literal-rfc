@@ -17,7 +17,11 @@ cat "readme-v2.md" \
   | sed -E -e '1h;2,$H;$!d;g' -e 's/(\nhttp[^ ]+)  (\nhttp)/\1\\\\\2/g' \
   | perl -pe "s/'\/\/'/'\`'/g" \
   | perl -pe "s/'\/\/\/\/'/'\`\`'/g" \
-  > readme-v2.txt;
+  | perl -pe "s/example\/\/(.*?)\/\//example\`\1\`/g" \
+  | perl -pe "s/\/\/\/\/\/\/\\\\\/\/\/\/\/\/\/\//\`/g" \
+  | perl -pe "s/\/\/\/\/\/\/\\\\\/\/\\\\\/\/\\\\\/\/\/\/\/\/\/\//\`\`\`/g" \
+  | perl -pe "s/  (- .where_sql)/\1/g" \
+ > readme-v2.txt;
 
 # cat "readme-v2.txt" \
 #   | sed -E \

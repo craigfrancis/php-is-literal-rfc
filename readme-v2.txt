@@ -408,6 +408,56 @@ While a LiteralString check would easily identify these mistakes; an alternative
 
 I'm fairly sure this won't be adopted by many programmers, as it's too difficult to write (and later read); in the same way developers are more likely to use //DOMDocument::loadHTML()// rather than add every element via //DOMDocument::createElement()//, //DOMDocument::createAttribute()//, etc.
 
+==== Tagged Templates ====
+
+In JavaScript, there is a form of Template Literal known as [[https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals#tagged_templates|Tagged Templates]].
+
+Available since Firefox 34, Chrome 41, NodeJS 4 (~2015); where libraries need to use [[https://github.com/tc39/proposal-array-is-template-object|isTemplateObject]] (NodeJS can use [[https://www.npmjs.com/package/is-template-object|is-template-object]]) to make sure the function is called correctly ([[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/others/npm/index.js|example]]).
+
+<code javascript>
+function example(strings, ...values) {
+    if (isTemplateObject(strings)) {
+       throw new Error('Not a Tagged Template');
+    }
+    return strings[0] + values[0] + strings[1] + values[1] + strings[2];
+}
+
+var id = 123,
+    field = 'name',
+    sql = example`WHERE id = ${id} ORDER BY ${field}`;
+
+console.log(sql);
+</code>
+
+PHP cannot use ` (execute shell command), but could use ``` (not ideal for MarkDown, e.g. documentation).
+
+Instead of calling a function directly, PHP could create a //TemplateLiteral// object, providing methods like //getStringParts()// and //getValues()//, so the object can be passed to a library to check and use.
+
+PHP could also support Template concatenation, to help readability, and support conditionally adding SQL/HTML (JavaScript does not support this, making query builders necessary).
+
+Tagged Templates might be a nice feature to have, but they are unlikely to be used by many developers to solve Injection Vulnerabilities (as is the case in NodeJS). Developers often believe their Database Abstractions or Parameterised Queries have completely solved Injection Vulnerabilities (unfortunately mistakes happen). Therefore, getting //all// developers to replace //all// of their sensitive LiteralStrings with Templates when using libraries like Laravel/Doctrine, or when writing SQL/HTML/CLI/etc, is unlikely. While changing the quote character is fairly easy, it is time-consuming, and risky for those without tests. In both cases any escaping functions would need to be removed (so no advantage there). Also, libraries wouldn't be able to use until PHP 8.X is the minimum supported version; and consideration would need to be given for things like identifying field-name variables in SQL.
+
+[[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/alternatives/tagged-templates.php|Example]] / [[https://github.com/craigfrancis/php-is-literal-rfc/commit/1dc5f4fb425009d03a640036a1022f88c4a0533d?diff=unified|Diff]]
+
+==== Macros ====
+
+In Rust it's possible to use [[https://github.com/craigfrancis/php-is-literal-rfc/tree/main/others/rust|procedural macros]], e.g.
+
+<code rust>
+html_add!("<p>Hello <span>?</span></p>");
+</code>
+
+Macros are run during compilation (when user values are not present), and can replace the code within the brackets. In this case the macro could check the contents, and if it's considered safe, change the code to call a method provided by a HTML Templating library with "unsafe" in its name. While developers could call the unsafe method directly, they are at least aware they are doing something unsafe, and can be easily found during an audit.
+
+But, checking the AST can get complicated for libraries; getting developers to replace their existing LiteralStrings to use Macros is unlikely (same issue as Tagged Templates); and without operator overloads ([[https://wiki.php.net/rfc/user_defined_operator_overloads|1]]/[[https://wiki.php.net/rfc/userspace_operator_overloading|2]]), concatenation would need to be handled within the macro:
+
+<code diff>
+- $where_sql .= ' AND deleted IS NULL';
++ $where_sql = sql!($where_sql . ' AND deleted IS NULL');
+</code>
+
+[[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/alternatives/macro.php|Example]] / [[https://github.com/craigfrancis/php-is-literal-rfc/commit/1f2baaebaf1dea6d5886c7e6e14e2b4f6dd179a5?diff=unified|Diff]]
+
 ==== Education ====
 
 Training simply does not scale, and mistakes still happen.
