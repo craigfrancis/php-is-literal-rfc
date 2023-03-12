@@ -18,11 +18,13 @@ Add `LiteralString` type, and `is_literal_string()`, to "distinguish strings fro
 
 This ensures the value cannot be a source of an Injection Vulnerability, because it does not contain user input.
 
-This technique is used at Google (as described in "Building Secure and Reliable Systems", see [Common Security Vulnerabilities, pages 251-255](https://static.googleusercontent.com/media/sre.google/en//static/pdf/building_secure_and_reliable_systems.pdf#page=287), which shows how "developer-controlled input" prevents these issues in Go); it's used by FaceBook developers (ref [pyre type-checker](https://eiv.dev/python-pyre/), where the **LiteralString** type has been added to Python 3.11 via [PEP 675](https://peps.python.org/pep-0675/)); and Christoph Kern discussed it in 2016 with [Preventing Security Bugs through Software Design](https://www.youtube.com/watch?v=ccfEu-Jj0as). Also explained at [USENIX Security 2015](https://www.usenix.org/conference/usenixsecurity15/symposium-program/presentation/kern), [OWASP AppSec US 2021](https://www.youtube.com/watch?v=06_suQAAfBc), and summarised at [eiv.dev](https://eiv.dev/).
+The `LiteralString` type has been added to Python 3.11 via [PEP 675](https://peps.python.org/pep-0675/).
+
+This technique is used at Google (as described in "Building Secure and Reliable Systems", see [Common Security Vulnerabilities, pages 251-255](https://static.googleusercontent.com/media/sre.google/en//static/pdf/building_secure_and_reliable_systems.pdf#page=287), which shows how "developer-controlled input" prevents these issues in Go); it's used by FaceBook developers (ref [pyre type-checker](https://eiv.dev/python-pyre/)); and Christoph Kern discussed it in 2016 with [Preventing Security Bugs through Software Design](https://www.youtube.com/watch?v=ccfEu-Jj0as). Also explained at [USENIX Security 2015](https://www.usenix.org/conference/usenixsecurity15/symposium-program/presentation/kern), [OWASP AppSec US 2021](https://www.youtube.com/watch?v=06_suQAAfBc), and summarised at [eiv.dev](https://eiv.dev/).
 
 ## The Problem
 
-Injection and Cross-Site Scripting (XSS) vulnerabilities are **easy to make**, **hard to identify**, and **very common**.
+Developers often believe Database Abstractions or Parameterised Queries have completely solved Injection and Cross-Site Scripting (XSS) vulnerabilities; and while the situation has improved, they still happen:
 
 ```php
 // Doctrine
@@ -232,21 +234,22 @@ These special non-LiteralString values should still be handled separately (and c
 For example, using a [separate array of $identifiers](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/example.php?ts=4#L194):
 
 ```php
-$sql = "
+$sql = '
   SELECT
-    t.name,
-    t.f1
+    u.name
   FROM
-    {my_table} AS t
+    user AS u
   WHERE
-    t.id = ?"; // A LiteralString
+    u.type = ?
+  ORDER BY
+    {field}'; // A LiteralString
 
 $parameters = [
-    $_GET['id'],
+    $_GET['type'],
   ];
 
 $identifiers = [
-    'my_table' => $_GET['table'],
+    'field' => $_GET['field'],
   ];
 
 $results = $db->query($sql, $parameters, $identifiers);
@@ -255,7 +258,7 @@ $results = $db->query($sql, $parameters, $identifiers);
 And WordPress 6.2 is scheduled to support ([#52506](https://core.trac.wordpress.org/ticket/52506)):
 
 ```php
-$wpdb->prepare('SELECT * FROM %i', $table_name);
+$wpdb->prepare('ORDER BY %i', $field);
 ```
 
 Or the library could use a [Query Builder](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/justification/example.php?ts=4#L229).
@@ -318,7 +321,7 @@ var_dump(sprintf('%.3f', 1.23)); // "1,230"
 
 We made the decision to only support 4 functions that concatenated strings.
 
-There are a lot of other candidates; e.g. adding `strtoupper()` might be reasonable, however we would need to consider the effect of every function and context, making the concept of a LiteralString more complex (e.g. `str_shuffle()` creating unpredictable results, or output varying based on the current locale).
+There are a lot of other candidates; e.g. adding `strtoupper()` might be reasonable, however we would need to consider the effect of every function and context, making the concept of a LiteralString more complex (e.g. output varying based on the current locale, `str_shuffle()` creating unpredictable results, etc).
 
 The main request that's come up over the last year is to support `sprintf()`. While this is reasonable for basic concatenation (e.g. only using "%s"), it gets more complicated when coercing values to a different type, or when using formatting. That said, a future RFC might consider changing this (with the main focus being on the implications/risks).
 
@@ -382,11 +385,11 @@ $html = "<a href='" . htmlentities($url) . "'>..."; // INSECURE
 
 All three examples would be incorrectly considered "safe" (untainted). The first two need the values to be quoted. The third example, `htmlentities()` does not escape single quotes by default before PHP 8.1 ([fixed](https://github.com/php/php-src/commit/50eca61f68815005f3b0f808578cc1ce3b4297f0)), and it does not consider the issue of 'javascript:' URLs.
 
-This is why Psalm, which supports Taint Checking, clearly notes these [limitations](https://psalm.dev/docs/security_analysis/#limitations).
+This is why Psalm notes these [Taint Checking Limitations](https://psalm.dev/docs/security_analysis/#limitations), and suggests using the `literal-string` type.
 
 ### Abstractions
 
-Libraries currently accept strings like the following:
+Libraries currently accept LiteralStrings like the following:
 
 ```php
 ->field_add('LEFT(ref, (LENGTH(ref) - 3))')
@@ -398,13 +401,13 @@ But the library has no idea when a programmer does something like:
 ->field_add('LEFT(ref, (LENGTH(ref) - ' . $_GET['cut'] . '))') // INSECURE
 ```
 
-While a LiteralString check would easily identify these mistakes; an alternative approach would be to replace these simple strings with abstractions, where the parts are either represented by an object, or are checked/quoted as appropriate; for example:
+While a LiteralString check would easily identify these mistakes; an alternative approach would be to replace these simple strings with a full abstraction, where every part is either represented by an object, or checked/quoted as appropriate; for example:
 
 ```php
 ->field_add(new Func('LEFT', 'ref', new Calc(new Func('LENGTH', 'ref'), '-', new Value(3))))
 ```
 
-I'm fairly sure this won't be adopted by many programmers, as it's too difficult to write (and later read); in the same way they are much more likely to use `DOMDocument::loadHTML()` rather than add every element via `DOMDocument::createElement()`, `DOMDocument::createAttribute()`, etc.
+I'm fairly sure this won't be adopted by many programmers, as it's too difficult to write (and later read); in the same way developers are more likely to use `DOMDocument::loadHTML()` rather than add every element via `DOMDocument::createElement()`, `DOMDocument::createAttribute()`, etc.
 
 ### Education
 
