@@ -429,13 +429,23 @@ var id = 123,
 console.log(sql);
 </code>
 
-PHP cannot use ` (execute shell command), but could use ``` (not ideal for MarkDown, e.g. documentation).
+PHP cannot use //`// (execute shell command), but could use //```//.
 
 Instead of calling a function directly, PHP could create a //TemplateLiteral// object, providing methods like //getStringParts()// and //getValues()//, so the object can be passed to a library to check and use.
 
-PHP could also support Template concatenation, to help readability, and support conditionally adding SQL/HTML (JavaScript does not support this, making query builders necessary).
+Concatenation can help readability, and to conditionally add SQL/HTML. By using a TemplateLiteral object, it would be possible to concatenate Templates with //$a = ```$a b```//, and supporting the concatenation in other ways would be up for debate:
 
-Tagged Templates might be a nice feature to have, but they are unlikely to be used by many developers to solve Injection Vulnerabilities (as is the case in NodeJS). Developers often believe their Database Abstractions or Parameterised Queries have completely solved Injection Vulnerabilities (unfortunately mistakes happen). Therefore, getting //all// developers to replace //all// of their sensitive LiteralStrings with Templates when using libraries like Laravel/Doctrine, or when writing SQL/HTML/CLI/etc, is unlikely. While changing the quote character is fairly easy, it is time-consuming, and risky for those without tests. In both cases any escaping functions would need to be removed (so no advantage there). Also, libraries wouldn't be able to use until PHP 8.X is the minimum supported version; and consideration would need to be given for things like identifying field-name variables in SQL.
+<code php>
+$sql = ```$sql AND category = $category```;
+
+$sql = ```deleted ``` . ($archive ? ```IS NOT NULL``` :  ```IS NULL```);
+
+if ($name) {
+    $sql .= ``` AND name = $name```;
+}
+</code>
+
+Tagged Templates might be a nice feature to have, but they are unlikely to be used by many developers to solve Injection Vulnerabilities (as is the case in NodeJS). Developers often believe their Database Abstractions or Parameterised Queries have completely solved Injection Vulnerabilities (but mistakes happen). Therefore, getting //all// developers to replace //all// of their sensitive LiteralStrings with Templates is unlikely. While changing the quote character is fairly easy, it is time-consuming, and risky for those without tests. In both cases any escaping functions would need to be removed (so no advantage there). Also, libraries wouldn't be able to use until PHP 8.X is the minimum supported version; and consideration would need to be given for things like identifying field-name variables in SQL.
 
 [[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/alternatives/tagged-templates.php|Example]] / [[https://github.com/craigfrancis/php-is-literal-rfc/commit/1dc5f4fb425009d03a640036a1022f88c4a0533d?diff=unified|Diff]]
 
@@ -447,7 +457,7 @@ In Rust it's possible to use [[https://github.com/craigfrancis/php-is-literal-rf
 html_add!("<p>Hello <span>?</span></p>");
 </code>
 
-Macros are run during compilation (when user values are not present), and can replace the code within the brackets. In this case the macro could check the contents, and if it's considered safe, change the code to call a method provided by a HTML Templating library with "unsafe" in its name. While developers could call the unsafe method directly, they are at least aware they are doing something unsafe, and can be easily found during an audit.
+Macros are run during compilation (when user values are not present), and can replace the code within the brackets. In this case the macro could check the contents, and if it's considered safe, change the code to call a method provided by the library with "unsafe" in its name. While developers could call the unsafe method directly, they are at least aware they are doing something unsafe, and can be easily found during an audit.
 
 But, checking the AST can get complicated for libraries; getting developers to replace their existing LiteralStrings to use Macros is unlikely (same issue as Tagged Templates); and without operator overloads ([[https://wiki.php.net/rfc/user_defined_operator_overloads|1]]/[[https://wiki.php.net/rfc/userspace_operator_overloading|2]]), concatenation would need to be handled within the macro:
 
