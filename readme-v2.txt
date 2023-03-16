@@ -4,7 +4,7 @@
   * Voting Start: ???
   * Voting End: ???
   * RFC Started: 2022-12-27
-  * RFC Updated: 2022-12-27
+  * RFC Updated: 2023-03-16
   * Author: Craig Francis, craig#at#craigfrancis.co.uk
   * Contributors: Joe Watkins, Máté Kocsis
   * Status: Draft
@@ -509,7 +509,7 @@ And there is the [[https://wiki.php.net/rfc/sql_injection_protection|Automatic S
   * It would have effected every SQL function, such as //mysqli_query()//, //$pdo->query()//, //odbc_exec()//, etc (concerns raised by [[https://news-web.php.net/php.internals/87436|Lester Caine]] and [[https://news-web.php.net/php.internals/87650|Anthony Ferrara]]);
   * Each of those functions would need a bypass for cases where unsafe SQL was intentionally being used (e.g. phpMyAdmin taking SQL from POST data) because some applications intentionally "pass raw, user submitted, SQL" (Ronald Chmara [[https://news-web.php.net/php.internals/87406|1]]/[[https://news-web.php.net/php.internals/87446|2]]).
 
-Last year I wrote the [[https://wiki.php.net/rfc/is_literal|is_literal() RFC]], where the feedback was:
+In 2021 I wrote the [[https://wiki.php.net/rfc/is_literal|is_literal() RFC]], where the feedback was:
 
   * "Ideally we would want to assign a variable to be of 'literal' type." [[https://externals.io/message/115306#115308|George P. Banyard]] (covered by this RFC).
   * "There is good progress in taint analysis" [[https://externals.io/message/115306#115455|Marco Pivetta]] (see the flaws noted with Taint Analysis above).
