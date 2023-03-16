@@ -400,13 +400,13 @@ But the library has no idea when a programmer does something like:
 ->field_add('LEFT(ref, (LENGTH(ref) - ' . $_GET['cut'] . '))') // INSECURE
 </code>
 
-While a LiteralString check would easily identify these mistakes; an alternative approach would be to replace these simple strings with a full abstraction, where every part is either represented by an object, or checked/quoted as appropriate; for example:
+A LiteralString check would easily identify these mistakes; but an alternative approach would be to replace these simple strings with a full abstraction, where //every// part is either represented by an object, or checked/quoted as appropriate; for example:
 
 <code php>
 ->field_add(new Func('LEFT', 'ref', new Calc(new Func('LENGTH', 'ref'), '-', new Value(3))))
 </code>
 
-I'm fairly sure this won't be adopted by many programmers, as it's too difficult to write (and later read); in the same way developers are more likely to use //DOMDocument::loadHTML()// rather than add every element via //DOMDocument::createElement()//, //DOMDocument::createAttribute()//, etc.
+While this does allow for additional checks (e.g. static analysis), it's unlikely many programmers will adopt, as it's difficult to write (and later read); in the same way developers are more likely to use //DOMDocument::loadHTML()// rather than add every element via //DOMDocument::createElement()//, //DOMDocument::createAttribute()//, etc.
 
 ==== Tagged Templates ====
 
@@ -424,28 +424,28 @@ function example(strings, ...values) {
 
 var id = 123,
     field = 'name',
-    sql = example`WHERE id = ${id} ORDER BY ${field}`;
+    sql = example`WHERE id = ${id} ORDER BY ${field}`; // The Template
 
 console.log(sql);
 </code>
 
-PHP cannot use //`// (execute shell command), but could use //```//.
+PHP cannot use //`// (execute shell command), but could use //```// (which can be tricky for MarkDown).
 
 Instead of calling a function directly, PHP could create a //TemplateLiteral// object, providing methods like //getStringParts()// and //getValues()//, so the object can be passed to a library to check and use.
 
-Concatenation can help readability, and to conditionally add SQL/HTML. By using a TemplateLiteral object, it would be possible to concatenate Templates with //$a = ```$a b```//, and supporting the concatenation in other ways would be up for debate:
+By using a //TemplateLiteral// object, it would be possible to concatenate with //$a = ```$a b```//. Concatenation is often used help readability, and conditionally add SQL/HTML. Supporting concatenation in other ways would be up for debate, e.g.
 
 <code php>
 $sql = ```$sql AND category = $category```;
 
-$sql = ```deleted ``` . ($archive ? ```IS NOT NULL``` :  ```IS NULL```);
+$sql = ```deleted ``` . ($archive ? ```IS NOT NULL``` :  ```IS NULL```); // Maybe
 
 if ($name) {
-    $sql .= ``` AND name = $name```;
+    $sql .= ``` AND name = $name```; // Maybe
 }
 </code>
 
-Tagged Templates might be a nice feature to have, but they are unlikely to be used by many developers to solve Injection Vulnerabilities (as is the case in NodeJS). Developers often believe their Database Abstractions or Parameterised Queries have completely solved Injection Vulnerabilities (but mistakes happen). Therefore, getting //all// developers to replace //all// of their sensitive LiteralStrings with Templates is unlikely. While changing the quote character is fairly easy, it is time-consuming, and risky for those without tests. In both cases any escaping functions would need to be removed (so no advantage there). Also, libraries wouldn't be able to use until PHP 8.X is the minimum supported version; and consideration would need to be given for things like identifying field-name variables in SQL.
+Tagged Templates might be a nice feature to have (in some cases they can be easier to read); but they are unlikely to be used by many developers to solve Injection Vulnerabilities (as is the case in NodeJS). Developers often believe their Database Abstractions or Parameterised Queries have completely solved Injection Vulnerabilities (but mistakes happen). Therefore, getting //all// developers to replace //all// of their sensitive LiteralStrings with Templates is unlikely. While changing the quote character is fairly easy, it is time-consuming, and risky for those without tests. In both cases any escaping functions would need to be removed (so no advantage there). Also, libraries wouldn't be able to use until PHP 8.X is the minimum supported version; and consideration would need to be given for things like identifying field-name variables in SQL.
 
 [[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/alternatives/tagged-templates.php|Example]] / [[https://github.com/craigfrancis/php-is-literal-rfc/commit/1dc5f4fb425009d03a640036a1022f88c4a0533d?diff=unified|Diff]]
 
@@ -459,11 +459,13 @@ html_add!("<p>Hello <span>?</span></p>");
 
 Macros are run during compilation (when user values are not present), and can replace the code within the brackets. In this case the macro could check the contents, and if it's considered safe, change the code to call a method provided by the library with "unsafe" in its name. While developers could call the unsafe method directly, they are at least aware they are doing something unsafe, and can be easily found during an audit.
 
-But, checking the AST can get complicated for libraries; getting developers to replace their existing LiteralStrings to use Macros is unlikely (same issue as Tagged Templates); and without operator overloads ([[https://wiki.php.net/rfc/user_defined_operator_overloads|1]]/[[https://wiki.php.net/rfc/userspace_operator_overloading|2]]), concatenation would need to be handled within the macro:
+Macros might be a nice feature to have; but it can get complicated for libraries to check the AST; getting developers to replace their existing LiteralStrings to use Macros is unlikely (as noted with Tagged Templates); and without operator overloads ([[https://wiki.php.net/rfc/user_defined_operator_overloads|1]]/[[https://wiki.php.net/rfc/userspace_operator_overloading|2]]), concatenation would need to be handled within the macro:
 
 <code diff>
 - $where_sql .= ' AND deleted IS NULL';
 + $where_sql = sql!($where_sql . ' AND deleted IS NULL');
+or
++ sql!($where_sql .= ' AND deleted IS NULL');
 </code>
 
 [[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/alternatives/macro.php|Example]] / [[https://github.com/craigfrancis/php-is-literal-rfc/commit/1f2baaebaf1dea6d5886c7e6e14e2b4f6dd179a5?diff=unified|Diff]]
