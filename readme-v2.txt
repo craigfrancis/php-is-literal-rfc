@@ -406,6 +406,8 @@ A LiteralString check would easily identify these mistakes; but an alternative a
 ->field_add(new Func('LEFT', 'ref', new Calc(new Func('LENGTH', 'ref'), '-', new Value(3))))
 </code>
 
+The [[https://github.com/tpetry/laravel-query-expressions|Laravel Query Expressions]] package does this.
+
 While this does allow for additional checks (e.g. static analysis), it's unlikely many programmers will adopt, as it's difficult to write (and later read); in the same way developers are more likely to use //DOMDocument::loadHTML()// rather than add every element via //DOMDocument::createElement()//, //DOMDocument::createAttribute()//, etc.
 
 ==== Tagged Templates ====
