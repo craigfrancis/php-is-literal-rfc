@@ -16,7 +16,9 @@
 
 Add `LiteralString` type, and `is_literal_string()`, to "distinguish strings from a trusted developer, from strings that may be attacker controlled".
 
-This ensures the value cannot be a source of an Injection Vulnerability, because it does not contain user input.
+The vast majority of Injection Vulnerabilities involving libraries (e.g. database abstractions) are due to programmers using the library incorrectly. A simple LiteralString check would allow libraries to easily identify these mistakes, without needing to make massive changes.
+
+It also allows developers to easily check their Parameterised Queries.
 
 The `LiteralString` type has been added to Python 3.11 via [PEP 675](https://peps.python.org/pep-0675/).
 
@@ -24,7 +26,7 @@ This technique is used at Google (as described in "Building Secure and Reliable 
 
 ## The Problem
 
-Developers often believe Database Abstractions or Parameterised Queries have completely solved Injection and Cross-Site Scripting (XSS) vulnerabilities; and while the situation has improved, they still happen:
+Developers often believe Database Abstractions or Parameterised Queries have completely solved Injection and Cross-Site Scripting (XSS) vulnerabilities; and while the situation has improved, mistakes still happen:
 
 ```php
 // Doctrine
@@ -371,7 +373,7 @@ Both [Psalm](https://github.com/vimeo/psalm/releases/tag/4.8.0) and [PHPStan](ht
 
 While I want more programmers to use Static Analysis, it's not realistic to expect all PHP programmers to always use these tools, and for all PHP code to be updated so Static Analysis can run the strictest checks, and use no baseline (using the JetBrains surveys; in [2021](https://www.jetbrains.com/lp/devecosystem-2021/php/#PHP_do-you-use-static-analysis) only 33% used Static Analysis; and [2022](https://www.jetbrains.com/lp/devecosystem-2022/php/#what-additional-quality-tools-do-you-use-regularly-if-any-) shows a similar story with 33% (at best) using PHPStan/Psalm/Phan; where the selected programmers for both surveys are 3 times more likely to use Laravel than WordPress).
 
-Also, it can be tricky to get current Static Analysis tools to cover every case. For example, they don't currently support [recursive type checking](https://stackoverflow.com/questions/71861442/php-static-analysis-and-recursive-type-checking), or [get a value-object to conditionally return a type](https://stackoverflow.com/questions/72231302/phpstan-extension-dynamic-return-types-with-value-objects). In contrast, both are [easy with the is_literal_string() function](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/examples/sql-orm.php#L60).
+Also, it can be tricky to get current Static Analysis tools to cover every case. For example, they don't currently support [recursive type checking](https://stackoverflow.com/questions/71861442/php-static-analysis-and-recursive-type-checking), or [get a value-object to conditionally return a type](https://stackoverflow.com/questions/72231302/phpstan-extension-dynamic-return-types-with-value-objects). In contrast, both are [easy with the LiteralString type](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/examples/sql-orm.php#L60).
 
 ### Taint Checking
 
@@ -415,7 +417,7 @@ While this does allow for additional checks (e.g. static analysis), it's unlikel
 
 In JavaScript, there is a form of Template Literal known as [Tagged Templates](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals#tagged_templates).
 
-Available since Firefox 34, Chrome 41, NodeJS 4 (~2015); where libraries need to use [isTemplateObject](https://github.com/tc39/proposal-array-is-template-object) (NodeJS can use [is-template-object](https://www.npmjs.com/package/is-template-object)) to make sure the function is called correctly ([example](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/others/npm/index.js)).
+Available since ~2015 (Firefox 34, Chrome 41, NodeJS 4); where libraries will need to use [isTemplateObject](https://github.com/tc39/proposal-array-is-template-object) (NodeJS can use [is-template-object](https://www.npmjs.com/package/is-template-object)) to make sure the function is called correctly ([example](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/others/npm/index.js)).
 
 ```javascript
 function example(strings, ...values) {
@@ -436,19 +438,23 @@ PHP cannot use ``` ` ``` (execute shell command), but could use ```` ``` ```` (w
 
 Instead of calling a function directly, PHP could create a `TemplateLiteral` object, providing methods like `getStringParts()` and `getValues()`, so the object can be passed to a library to check and use.
 
-By using a `TemplateLiteral` object, it would be possible to concatenate with ```` $a = ```$a b``` ````. Concatenation is often used help readability, and conditionally add SQL/HTML. Supporting concatenation in other ways would be up for debate, e.g.
+By using a `TemplateLiteral` object, it would be possible to concatenate with ```` $a = ```$a b``` ````. Concatenation is often used to help readability, and conditionally add SQL/HTML. Supporting concatenation in other ways would be up for debate, e.g.
 
 ```php
 $sql = ```$sql AND category = $category```;
 
-$sql = ```deleted ``` . ($archive ? ```IS NOT NULL``` :  ```IS NULL```); // Maybe
+$sql = ```deleted ``` . ($archive ? ```IS NOT NULL``` :  ```IS NULL```); // Maybe?
 
 if ($name) {
-    $sql .= ``` AND name = $name```; // Maybe
+  $sql .= ``` AND name = $name```; // Maybe?
 }
 ```
 
-Tagged Templates might be a nice feature to have (in some cases they can be easier to read); but they are unlikely to be used by many developers to solve Injection Vulnerabilities (as is the case in NodeJS). Developers often believe their Database Abstractions or Parameterised Queries have completely solved Injection Vulnerabilities (but mistakes happen). Therefore, getting *all* developers to replace *all* of their sensitive LiteralStrings with Templates is unlikely. While changing the quote character is fairly easy, it is time-consuming, and risky for those without tests. In both cases any escaping functions would need to be removed (so no advantage there). Also, libraries wouldn't be able to use until PHP 8.X is the minimum supported version; and consideration would need to be given for things like identifying field-name variables in SQL.
+Consideration would be needed on if/how Tagged Templates could protect functions like `mysqli_query()`; e.g. checking Tagged Template uses no variables? In comparison, all exiting (and future) code that defines their SQL as a LiteralString can simply be accepted (see the Future Scope section for details).
+
+Tagged Templates might be a nice feature to have (sometimes they can be easier to read); but developers often believe their Database Abstractions or Parameterised Queries have completely solved Injection Vulnerabilities (unfortunately mistakes still happen), so it would be very unlikely to get *all* developers to replace *all* of their existing LiteralStrings with Tagged Templates (note how few libraries have done this in NodeJS).
+
+While changing the quote character is fairly easy, it is tricky to automate, time-consuming, and risky for those without tests (a typical project would be looking at changing thousands of lines of code). Any escaping functions would still need to be removed (so no advantage there). Identifying field-name variables in SQL Tagged Templates would need to be considered, and libraries could not use this until PHP 8.X is their minimum supported version.
 
 [Example](https://github.com/craigfrancis/php-is-literal-rfc/blob/main/alternatives/tagged-templates.php) / [Diff](https://github.com/craigfrancis/php-is-literal-rfc/commit/1dc5f4fb425009d03a640036a1022f88c4a0533d?diff=unified)
 
