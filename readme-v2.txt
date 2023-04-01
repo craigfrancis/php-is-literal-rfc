@@ -222,6 +222,8 @@ $fields = [
 $sql .= ' ORDER BY ' . ($fields[$sort] ?? 'u.full_name'); // A LiteralString
 </code>
 
+This approach stops the attacker specifying a private field (e.g. //telephone_number//, where they can determine every users telephone number by updating their own account, and seeing how that affects the order).
+
 There may be some exceptions, see the next section.
 
 ==== FAQ: Non-LiteralString Values ====
@@ -416,7 +418,7 @@ While this does allow for additional checks (e.g. static analysis), it's unlikel
 
 In JavaScript, there is a form of Template Literal known as [[https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals#tagged_templates|Tagged Templates]].
 
-Available since ~2015 (Firefox 34, Chrome 41, NodeJS 4); where libraries will need to use [[https://github.com/tc39/proposal-array-is-template-object|isTemplateObject]] (NodeJS can use [[https://www.npmjs.com/package/is-template-object|is-template-object]]) to make sure the function is called correctly ([[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/others/npm/index.js|example]]).
+Available since ~2015 (Firefox 34, Chrome 41, NodeJS 4); where libraries should use [[https://github.com/tc39/proposal-array-is-template-object|isTemplateObject]] (NodeJS can use [[https://www.npmjs.com/package/is-template-object|is-template-object]]) to ensure the function is called correctly ([[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/others/npm/index.js|example]]).
 
 <code javascript>
 function example(strings, ...values) {
@@ -437,23 +439,29 @@ PHP cannot use //`// (execute shell command), but could use //```// (which can b
 
 Instead of calling a function directly, PHP could create a //TemplateLiteral// object, providing methods like //getStringParts()// and //getValues()//, so the object can be passed to a library to check and use.
 
-By using a //TemplateLiteral// object, it would be possible to concatenate with //$a = ```$a b```//. Concatenation is often used to help readability, and conditionally add SQL/HTML. Supporting concatenation in other ways would be up for debate, e.g.
+By using a //TemplateLiteral// object, it would be possible to concatenate with //$a = ```{$a} b```// (e.g. to conditionally add SQL/HTML, or help readability); but other forms of concatenation would be up for debate, e.g.
 
 <code php>
-$sql = ```$sql AND category = $category```;
+$sql = ```{$sql} AND category = {$category}```;
 
 $sql = ```deleted ``` . ($archive ? ```IS NOT NULL``` :  ```IS NULL```); // Maybe?
 
 if ($name) {
-  $sql .= ``` AND name = $name```; // Maybe?
+  $sql .= ``` AND name = {$name}```; // Maybe?
 }
 </code>
 
-Consideration would be needed on if/how Tagged Templates could protect functions like //mysqli_query()//; e.g. checking Tagged Template uses no variables? In comparison, all exiting (and future) code that defines their SQL as a LiteralString can simply be accepted (see the Future Scope section for details).
+Tagged Templates might be a nice feature to have (sometimes they can be easier to read), but assuming a //__toString()// method is provided, we must also consider mis-use; e.g. in JavaScript, basic Template Literals have made it much easier for developers to create XSS vulnerabilities, where developers often don't think about HTML encoding in this context:
 
-Tagged Templates might be a nice feature to have (sometimes they can be easier to read); but developers often believe their Database Abstractions or Parameterised Queries have completely solved Injection Vulnerabilities (unfortunately mistakes still happen), so it would be very unlikely to get //all// developers to replace //all// of their existing LiteralStrings with Tagged Templates (note how few libraries have done this in NodeJS).
+<code javascript>
+p.innerHTML = `Hi ${name}`;
+</code>
 
-While changing the quote character is fairly easy, it is tricky to automate, time-consuming, and risky for those without tests (a typical project would be looking at changing thousands of lines of code). Any escaping functions would still need to be removed (so no advantage there). Identifying field-name variables in SQL Tagged Templates would need to be considered, and libraries could not use this until PHP 8.X is their minimum supported version.
+Consideration would be needed on if/how Tagged Templates could protect functions like //mysqli_query()//; e.g. only accept if the Tagged Template uses no variables? or could PDO, MySQLi, ODBC, etc provide Value-Objects for Identifiers? In comparison, a LiteralString can simply be accepted - so code that already uses LiteralString's would not need any modification (see Future Scope for special cases).
+
+Also, considering developers often (incorrectly) believe their Database Abstractions or Parameterised Queries have completely solved Injection Vulnerabilities, it would be very unlikely to get //all// developers to replace //all// of their existing LiteralStrings with Tagged Templates (note how few libraries use this in NodeJS).
+
+While changing the quote character is fairly easy, it's tricky to automate, time-consuming, and risky for those without tests (a typical project can easily require thousands of lines of code to be changed). Any escaping functions would still need to be removed (so no advantage there). Variables for Identifiers (e.g. field-name) in SQL Tagged Templates would need to be considered, and developers will need to wait until PHP 8.X is their minimum supported version.
 
 [[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/alternatives/tagged-templates.php|Example]] / [[https://github.com/craigfrancis/php-is-literal-rfc/commit/1dc5f4fb425009d03a640036a1022f88c4a0533d?diff=unified|Diff]]
 

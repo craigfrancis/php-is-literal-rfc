@@ -20,9 +20,10 @@ cat "readme-v2.md" \
   | perl -pe "s/example\/\/(.*?)\/\//example\`\1\`/g" \
   | sed 's|////// // //////|//\`//|g' \
   | sed 's|//////// ////// ////////|//```//|g' \
-  | sed 's|//////// $a = //////$a b////// ////////|//$a = ```$a b```//|g' \
-  | sed 's|//////$sql AND category = $category//////|```$sql AND category = $category```|g' \
-  | sed 's|////// AND name = $name//////|``` AND name = $name```|g' \
+  | sed 's|//////// $a = //////{$a} b////// ////////|//$a = ```{$a} b```//|g' \
+  | sed 's|//////{$sql} AND category = {$category}//////|```{$sql} AND category = {$category}```|g' \
+  | sed 's|////// AND name = {$name}//////|``` AND name = {$name}```|g' \
+  | sed 's|//Hi ${name}//|`Hi ${name}`|g' \
   | sed 's|//////deleted ////// . ($archive ? //////IS NOT NULL////// :  //////IS NULL//////)|```deleted ``` . ($archive ? ```IS NOT NULL``` :  ```IS NULL```)|g' \
   | sed 's|  - $where_sql .=|- $where_sql .=|g' \
  > readme-v2.txt;
