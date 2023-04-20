@@ -143,6 +143,8 @@ function literal_concat(...$a) {
 }
 </code>
 
+[[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/others/python/integers.py|Python]] and [[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/others/go/integers.go|Go]] support string concatenation as well.
+
 (On a technical note, we did test an implementation that didn't support concatenation, primarily to see if this would help reduce the performance impact even further. However, the PHP engine can sometimes still concatenate values automatically at compile-time (so concatenation appears to work in some contexts), and it didn't make much (if any) difference in regards to performance, because //concat_function()// in "zend_operators.c" uses //zend_string_extend()// (which needs to remove the //LiteralString// flag) and "zend_vm_def.h" does the same; by supporting a quick concat with an empty string (x2), which would need its flag removed as well).
 
 ==== String Splitting ====
@@ -303,6 +305,8 @@ We wanted to flag integers defined in the source code, in the same way we are do
 
 Due to this limitation, we did consider an approach to trust all integers, where Scott Arciszewski suggested the name //is_noble()//. While this is not as philosophically pure, we continued to explore this possibility because we could not find any way an Injection Vulnerability could be introduced with integers in SQL, HTML, CLI; and other contexts as well (e.g. preg, mail additional_params, XPath query, and even eval). We could not find any character encoding issues either (The closest we could find was EBCDIC, an old IBM character encoding, which encodes the 0-9 characters differently; which anyone using it would need to re-encode either way, and [[https://www.php.net/manual/en/migration80.other-changes.php#migration80.other-changes.ebcdic|EBCDIC is not supported by PHP]]). And we could not find any issue with a 64bit PHP server sending a large number to a 32bit database, because the number is being encoded as characters in a string (so that's also fine). However, the feedback received was that while safe from Injection Vulnerabilities, it becomes a more complex concept, one that might cause programmers to assume it is also safe from programmer/logic errors. Ultimately the preference was the simpler approach, that did not allow any integers (which is reinforced with the name LiteralString).
 
+[[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/others/python/integers.py|Python]] and [[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/others/go/integers.go|Go]] do not support integers either.
+
 ==== FAQ: Other Values ====
 
 Like Integers, it would be hard to support Boolean/Float values; they are also a very low-value feature, and we cannot be sure of the security implications.
@@ -454,7 +458,7 @@ if ($name) {
 Tagged Templates might be a nice feature to have (sometimes they can be easier to read), but assuming a //__toString()// method is provided, we must also consider mis-use; e.g. in JavaScript, basic Template Literals have made it much easier for developers to create XSS vulnerabilities, where developers often don't think about HTML encoding in this context:
 
 <code javascript>
-p.innerHTML = `Hi ${name}`;
+p.innerHTML = `Hi ${name}`; // INSECURE
 </code>
 
 Consideration would be needed on if/how Tagged Templates could protect functions like //mysqli_query()//; e.g. only accept if the Tagged Template uses no variables? or could PDO, MySQLi, ODBC, etc provide Value-Objects for Identifiers? In comparison, a LiteralString can simply be accepted - so code that already uses LiteralString's would not need any modification (see Future Scope for special cases).
@@ -464,6 +468,8 @@ Also, considering developers often (incorrectly) believe their Database Abstract
 While changing the quote character is fairly easy, it's tricky to automate, time-consuming, and risky for those without tests (a typical project can easily require thousands of lines of code to be changed). Any escaping functions would still need to be removed (so no advantage there). Variables for Identifiers (e.g. field-name) in SQL Tagged Templates would need to be considered, and developers will need to wait until PHP 8.X is their minimum supported version.
 
 [[https://github.com/craigfrancis/php-is-literal-rfc/blob/main/alternatives/tagged-templates.php|Example]] / [[https://github.com/craigfrancis/php-is-literal-rfc/commit/1dc5f4fb425009d03a640036a1022f88c4a0533d?diff=unified|Diff]]
+
+[[https://docs.hhvm.com/hack/XHP/introduction|XHP]] in Hack / HHVM is similar, where it introduces an XML-like syntax that can be used for HTML templating.
 
 ==== Macros ====
 
@@ -580,13 +586,25 @@ None known
 
 ===== Open Issues =====
 
-None
+Additional testing of the final implementation; including extensions like [[https://www.swoole.com/|Swoole]] or [[https://openswoole.com/|OpenSwoole]].
+
+Should //eval()// be unable to create a LiteralString, or is too similar to:
+
+<code php>
+$id = ($_GET['id'] ?? NULL);
+$file = tempnam(sys_get_temp_dir(), 'literal-string');
+file_put_contents($file, '<'.'?php return '.var_export(strval($id),true).';');
+$id = require($file);
+unlink($file);
+</code>
 
 ===== Future Scope =====
 
 1) We might re-look at //sprintf()// being able to return a LiteralString.
 
-2) As noted by MarkR, the biggest benefit will come when this flag can be used by PDO and similar functions (//mysqli_query//, //preg_match//, //exec//, etc).
+2) We might re-look at //LiteralInteger//. While this is unlikely, as it would change the zval structure, it might be possible if there is enough demand. It would also need a discussion on what happens with other operations, e.g. integer addition.
+
+3) As noted by MarkR, the biggest benefit will come when this flag can be used by PDO and similar functions (//mysqli_query//, //preg_match//, //exec//, etc).
 
 However, first we need libraries to start checking the relevant inputs are a LiteralString. The library can then do their thing, and apply the appropriate escaping, which can result in a value that no longer has the LiteralString flag set, but is perfectly safe for the native functions.
 
