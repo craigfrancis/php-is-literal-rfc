@@ -25,10 +25,10 @@ To create a new patch:
 Then compile...
 
 ```
-brew install openssl bison re2c libiconv icu4c mhash;
+brew install openssl bison re2c libiconv icu4c mhash libxml2 pkg-config;
 
-export PATH="/usr/local/opt/bison/bin:$PATH" && \
-export PKG_CONFIG_PATH="/usr/local/opt/openssl/lib/pkgconfig:/usr/local/opt/icu4c/lib/pkgconfig" && \
+export PKG_CONFIG="/usr/local/bin/pkg-config" && \
+export PKG_CONFIG_PATH="/usr/local/opt/openssl@3/lib/pkgconfig:/usr/local/opt/icu4c/lib/pkgconfig" && \
 ./buildconf && \
 ./configure \
     --enable-option-checking=fatal \
