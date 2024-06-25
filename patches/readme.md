@@ -1,18 +1,18 @@
 
 Apply the patch to the PHP source:
 
-	cd src/php-8.2.0
+	cd src/php-8.3.8
 
-    patch --dry-run -p1 < ../../patches/8.2.0-main.diff
+    patch --dry-run -p1 < ../../patches/8.3.8-main.diff
 
-    patch -p1 < ../../patches/8.2.0-main.diff
-    patch -p1 < ../../patches/8.2.0-tests.diff
+    patch -p1 < ../../patches/8.3.8-main.diff
+    patch -p1 < ../../patches/8.3.8-tests.diff
 
     php Zend/zend_vm_gen.php
 
 To create a new patch:
 
-	diff -ur ./php-8.2.0-orig/ ./php-8.2.0/ > ../patches/8.2.0-main.diff
+	diff -ur ./php-8.3.8-orig/ ./php-8.3.8/ > ../patches/8.3.8-main.diff
 
 	Edit the diff:
 
@@ -27,8 +27,8 @@ Then compile...
 ```
 brew install openssl bison re2c libiconv icu4c mhash libxml2 pkg-config;
 
-export PKG_CONFIG="/usr/local/bin/pkg-config" && \
-export PKG_CONFIG_PATH="/usr/local/opt/openssl@3/lib/pkgconfig:/usr/local/opt/icu4c/lib/pkgconfig" && \
+export PKG_CONFIG="/opt/homebrew/bin/pkg-config" && \
+export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig:/opt/homebrew/opt/icu4c/lib/pkgconfig" && \
 ./buildconf && \
 ./configure \
     --enable-option-checking=fatal \
@@ -60,23 +60,23 @@ export PKG_CONFIG_PATH="/usr/local/opt/openssl@3/lib/pkgconfig:/usr/local/opt/ic
     --with-external-pcre \
     --with-fpm-user=_www \
     --with-fpm-group=_www \
-    --with-iconv=/usr/local/opt/libiconv \
+    --with-iconv=/opt/homebrew/opt/libiconv \
     --with-layout=GNU \
     --with-libxml \
     --with-libedit \
-    --with-mhash=/usr/local/opt/mhash \
+    --with-mhash=/opt/homebrew/opt/mhash \
     --with-mysql-sock=/tmp/mysql.sock \
     --with-mysqli=mysqlnd \
     --with-openssl \
-    --with-password-argon2=/usr/local/opt/argon2 \
-    --with-pdo-dblib=/usr/local/opt/freetds \
+    --with-password-argon2=/opt/homebrew/opt/argon2 \
+    --with-pdo-dblib=/opt/homebrew/opt/freetds \
     --with-pdo-mysql=mysqlnd \
-    --with-pdo-odbc=unixODBC,/usr/local/opt/unixodbc \
-    --with-pdo-pgsql=/usr/local/opt/libpq \
+    --with-pdo-odbc=unixODBC,/opt/homebrew/opt/unixodbc \
+    --with-pdo-pgsql=/opt/homebrew/opt/libpq \
     --with-pdo-sqlite=/usr \
-    --with-pgsql=/usr/local/opt/libpq \
+    --with-pgsql=/opt/homebrew/opt/libpq \
     --with-pic \
-    --with-pspell=/usr/local/opt/aspell \
+    --with-pspell=/opt/homebrew/opt/aspell \
     --with-sodium \
     --with-sqlite3 \
     --with-unixODBC \

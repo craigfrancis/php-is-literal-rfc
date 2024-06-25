@@ -50,7 +50,7 @@ diff -ur a/Zend/zend_compile.c b/Zend/zend_compile.c
  static zend_result zend_compile_func_cast(znode *result, zend_ast_list *args, uint32_t type) /* {{{ */
  {
  	znode arg_node;
-@@ -4557,6 +4575,8 @@
+@@ -4576,6 +4594,8 @@
  		return zend_compile_func_typecheck(result, args, IS_RESOURCE);
  	} else if (zend_string_equals_literal(lcname, "is_scalar")) {
  		return zend_compile_func_is_scalar(result, args);
@@ -551,7 +551,7 @@ diff -ur a/Zend/zend_types.h b/Zend/zend_types.h
 diff -ur a/Zend/zend_vm_def.h b/Zend/zend_vm_def.h
 --- a/Zend/zend_vm_def.h
 +++ b/Zend/zend_vm_def.h
-@@ -4325,6 +4325,18 @@
+@@ -4332,6 +4332,18 @@
  	HANDLE_EXCEPTION();
  }
  
@@ -664,7 +664,7 @@ diff -ur a/ext/opcache/ZendAccelerator.c b/ext/opcache/ZendAccelerator.c
 diff -ur a/ext/standard/basic_functions.stub.php b/ext/standard/basic_functions.stub.php
 --- a/ext/standard/basic_functions.stub.php
 +++ b/ext/standard/basic_functions.stub.php
-@@ -3613,6 +3613,8 @@
+@@ -3612,6 +3612,8 @@
   */
  function is_scalar(mixed $value): bool {}
  
