@@ -29,7 +29,7 @@ brew install openssl bison re2c libiconv icu4c mhash libxml2 pkg-config;
 
 export PKG_CONFIG="/opt/homebrew/bin/pkg-config" && \
 export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig:/opt/homebrew/opt/icu4c/lib/pkgconfig" && \
-./buildconf && \
+./buildconf -f && \
 ./configure \
     --enable-option-checking=fatal \
     --enable-opcache \
@@ -76,7 +76,6 @@ export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig:/opt/homebrew/
     --with-pdo-sqlite=/usr \
     --with-pgsql=/opt/homebrew/opt/libpq \
     --with-pic \
-    --with-pspell=/opt/homebrew/opt/aspell \
     --with-sodium \
     --with-sqlite3 \
     --with-unixODBC \
